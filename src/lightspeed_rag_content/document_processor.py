@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 import faiss
 from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
 from llama_index.core.llms.utils import resolve_llm
+from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document, TextNode
 from llama_index.core.storage.storage_context import StorageContext
@@ -277,12 +278,12 @@ vector_dbs:
         # Not using importlib to help with typechecking
         import llama_stack  # pylint: disable=C0415
 
-        self.document_class = llama_stack.apis.tools.rag_tool.RAGDocument  # type: ignore
+        self.document_class = llama_stack.apis.tools.rag_tool.RAGDocument
         self.client_class = (
-            llama_stack.distribution.library_client.LlamaStackAsLibraryClient  # type: ignore
+            llama_stack.distribution.library_client.LlamaStackAsLibraryClient
         )
         self.documents: list[
-            dict[str, Any] | llama_stack.apis.tools.rag_tool.RAGDocument  # type: ignore
+            dict[str, Any] | llama_stack.apis.tools.rag_tool.RAGDocument
         ] = []
 
     def write_yaml_config(self, index_id: str, filename: str, db_file: str) -> None:
@@ -479,6 +480,7 @@ class DocumentProcessor:
                 if unreachable_action == "drop":
                     docs = reachable_docs
 
+        docs = list(MarkdownNodeParser().get_nodes_from_documents(docs))
         self.db.add_docs(docs)
 
         # Count embedded files and unreachable nodes
