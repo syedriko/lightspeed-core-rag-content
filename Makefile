@@ -34,6 +34,7 @@ install-hooks: install-deps-test ## Install commit hooks
 .PHONY: install-deps
 install-deps: install-tools uv-lock-check ## Install all required dependencies, according to uv.lock
 	uv sync
+	uv export --no-emit-workspace --no-dev --no-annotate --no-header --output-file requirements.txt
 
 .PHONY: install-deps-test
 install-deps-test: install-tools uv-lock-check ## Install all required dev dependencies, according to uv.lock
@@ -44,6 +45,7 @@ update-deps: ## Check pyproject.toml for changes, update the lock file if needed
 	uv lock --upgrade
 	uv sync
 	uv sync --dev
+	uv export --no-emit-workspace --no-dev --no-annotate --no-header --output-file requirements.txt
 
 .PHONY: check-types
 check-types: ## Check types in the code.
@@ -100,6 +102,12 @@ start-postgres-debug: ## Start postgresql from the pgvector container image with
 	 -p $(POSTGRES_PORT):5432 \
 	 -v ./postgresql/data:/var/lib/postgresql/data:Z pgvector/pgvector:pg16 \
 	 postgres -c log_statement=all -c log_destination=stderr
+
+update-docs: ## Update the plaintext OCP docs in ocp-product-docs-plaintext/
+	@set -e && for OCP_VERSION in $$(ls -1 ocp-product-docs-plaintext); do \
+		scripts/get_ocp_plaintext_docs.sh $$OCP_VERSION; \
+	done
+	scripts/get_runbooks.sh
 
 .PHONY: help
 help: ## Show this help screen

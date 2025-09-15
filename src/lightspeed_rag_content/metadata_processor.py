@@ -21,6 +21,7 @@ import typing
 import requests
 
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
 
 
 class MetadataProcessor:
@@ -82,7 +83,7 @@ class MetadataProcessor:
             )
             url_reachable = False
 
-        LOG.debug(
+        print(
             'Metadata populated for: "%(title)s" (URL: %(url)s, File '
             "path: %(file_path)s)",
             document,

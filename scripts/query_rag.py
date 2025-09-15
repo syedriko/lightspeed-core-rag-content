@@ -134,92 +134,95 @@ def _llama_stack_query(args: argparse.Namespace) -> None:
     yaml.safe_dump(cfg, open(cfg_file, "w", encoding="utf-8"))
 
     stack_lib = importlib.import_module("llama_stack")
-    client = stack_lib.distribution.library_client.LlamaStackAsLibraryClient(cfg_file)
-    client.initialize()
+    try:
+        client = stack_lib.distribution.library_client.LlamaStackAsLibraryClient(cfg_file)
+        client.initialize()
 
-    # No need to register the DB as it's defined in llama-stack.yaml
-    # model_id = cfg["models"][0]["model_id"]
-    # client.vector_dbs.register(
-    #     vector_db_id=args.product_index, embedding_model=model_id
-    # )
+        # No need to register the DB as it's defined in llama-stack.yaml
+        # model_id = cfg["models"][0]["model_id"]
+        # client.vector_dbs.register(
+        #     vector_db_id=args.product_index, embedding_model=model_id
+        # )
 
-    query_cfg = {
-        "chunk_size_in_tokens": 380,  # Not configurable on this script
-        "mode": "vector",  # "vector", "keyword", or "hybrid". Default "vector"
-        "max_chunks": args.top_k,
-        "chunk_overlap_in_tokens": 0,  # Not configurable on this script
-        # "chunk_template": "Result {index}\\nContent: {chunk.content}\\n"
-        #                   "Metadata: {metadata}\\n"
-        #      Available placeholders:
-        #        {index}: 1-based chunk ordinal
-        #        {chunk.content}: chunk content string
-        #        {metadata}: chunk metadata dict
-        # "max_tokens_in_context": Maximum number of tokens in the context.
-        # "ranker": Ranker to use in hybrid search. Defaults to RRF ranker.
-    }
-    res = client.tool_runtime.rag_tool.query(
-        vector_db_ids=[args.product_index], content=args.query, query_config=query_cfg
-    )
-
-    md = res.metadata
-    if len(md["chunks"]) == 0:
-        logging.warning(f"No chunks retrieved for query: {args.query}")
-        if args.json:
-            result = {
-                "query": args.query,
-                "top_k": args.top_k,
-                "threshold": args.threshold,
-                "nodes": [],
-            }
-            print(json.dumps(result, indent=2))
-        exit(1)
-
-    threshold = args.threshold
-    if threshold > 0.0 and md.get("scores") and md["scores"][0].score < threshold:
-        logging.warning(
-            f"Score {md['scores'][0].score} of the top retrieved node for query '{args.query}' "
-            f"didn't cross the minimal threshold {threshold}."
-        )
-        if args.json:
-            result = {
-                "query": args.query,
-                "top_k": args.top_k,
-                "threshold": args.threshold,
-                "nodes": [],
-            }
-            print(json.dumps(result, indent=2))
-        exit(1)
-
-    # Format results
-    result = {
-        "query": args.query,
-        "top_k": args.top_k,
-        "threshold": args.threshold,
-        "nodes": [],
-    }
-
-    for _id, chunk, score in zip(md["document_ids"], md["chunks"], md["scores"]):
-        node_data = {
-            "id": _id,
-            "score": score.score if hasattr(score, "score") else score,
-            "text": chunk,
-            "metadata": {},
+        query_cfg = {
+            "chunk_size_in_tokens": 380,  # Not configurable on this script
+            "mode": "vector",  # "vector", "keyword", or "hybrid". Default "vector"
+            "max_chunks": args.top_k,
+            "chunk_overlap_in_tokens": 0,  # Not configurable on this script
+            # "chunk_template": "Result {index}\\nContent: {chunk.content}\\n"
+            #                   "Metadata: {metadata}\\n"
+            #      Available placeholders:
+            #        {index}: 1-based chunk ordinal
+            #        {chunk.content}: chunk content string
+            #        {metadata}: chunk metadata dict
+            # "max_tokens_in_context": Maximum number of tokens in the context.
+            # "ranker": Ranker to use in hybrid search. Defaults to RRF ranker.
         }
-        result["nodes"].append(node_data)
+        res = client.tool_runtime.rag_tool.query(
+            vector_db_ids=[args.product_index], content=args.query, query_config=query_cfg
+        )
 
-    if args.json:
-        print(json.dumps(result, indent=2))
-    else:
+        md = res.metadata
+        if len(md["chunks"]) == 0:
+            logging.warning(f"No chunks retrieved for query: {args.query}")
+            if args.json:
+                result = {
+                    "query": args.query,
+                    "top_k": args.top_k,
+                    "threshold": args.threshold,
+                    "nodes": [],
+                }
+                print(json.dumps(result, indent=2))
+            exit(1)
+
+        threshold = args.threshold
+        if threshold > 0.0 and md.get("scores") and md["scores"][0].score < threshold:
+            logging.warning(
+                f"Score {md['scores'][0].score} of the top retrieved node for query '{args.query}' "
+                f"didn't cross the minimal threshold {threshold}."
+            )
+            if args.json:
+                result = {
+                    "query": args.query,
+                    "top_k": args.top_k,
+                    "threshold": args.threshold,
+                    "nodes": [],
+                }
+                print(json.dumps(result, indent=2))
+            exit(1)
+
+        # Format results
+        result = {
+            "query": args.query,
+            "top_k": args.top_k,
+            "threshold": args.threshold,
+            "nodes": [],
+        }
+
         for _id, chunk, score in zip(md["document_ids"], md["chunks"], md["scores"]):
-            print("=" * 80)
-            print(f"Node ID: {_id}\nScore: {score}\nText:\n{chunk}")
+            node_data = {
+                "id": _id,
+                "score": score.score if hasattr(score, "score") else score,
+                "text": chunk,
+                "metadata": {},
+            }
+            result["nodes"].append(node_data)
 
-    # Method 2 to present data:
-    # for content in res.content:
-    #     if content.type == 'text':
-    #         print(content.text)
-    #     else:
-    #         print(content)
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            for _id, chunk, score in zip(md["document_ids"], md["chunks"], md["scores"]):
+                print("=" * 80)
+                print(f"Node ID: {_id}\nScore: {score}\nText:\n{chunk}")
+
+        # Method 2 to present data:
+        # for content in res.content:
+        #     if content.type == 'text':
+        #         print(content.text)
+        #     else:
+        #         print(content)
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":
@@ -290,3 +293,14 @@ if __name__ == "__main__":
         _llama_index_query(args)
     else:
         _llama_stack_query(args)
+
+    import asyncio
+    for t in asyncio.all_tasks():
+        if t is not asyncio.current_task() and not t.done():
+            t.print_stack()
+
+#    import atexit, logging
+#    @atexit.register
+#    def _quiet_exit():
+#        logging.getLogger().handlers.clear()
+

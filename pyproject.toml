@@ -53,12 +53,12 @@ dynamic = ["license", "readme"]
 
 # PyTorch has multiple wheel variants for different backends - cpu, gpu, etc.
 # By default on pypi.org is the gpu variant. Forces uv to use the cpu variant.
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-[tool.uv.sources]
-torch = [{ index = "pytorch-cpu" }]
+#[[tool.uv.index]]
+#name = "pytorch-cpu"
+#url = "https://download.pytorch.org/whl/cpu"
+#explicit = true
+#[tool.uv.sources]
+#torch = [{ index = "pytorch-cpu" }]
 
 [dependency-groups]
 dev = [
