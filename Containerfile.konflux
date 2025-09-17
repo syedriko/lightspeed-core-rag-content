@@ -1,20 +1,11 @@
 ARG EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
-ARG FLAVOR=cpu
 ARG HERMETIC=false
 
-FROM registry.access.redhat.com/ubi9/python-312 as cpu-base
+FROM nvcr.io/nvidia/cuda:12.9.1-devel-ubi9 as lightspeed-rag-builder
 ARG EMBEDDING_MODEL
-ARG FLAVOR
-
-FROM nvcr.io/nvidia/cuda:12.9.1-devel-ubi9 as gpu-base
-ARG EMBEDDING_MODEL
-ARG FLAVOR
-RUN dnf install -y python3.12 python3.12-pip libcudnn9 libnccl libcusparselt0
-
-FROM ${FLAVOR}-base as lightspeed-rag-builder
-ARG EMBEDDING_MODEL
-ARG FLAVOR
 ARG HERMETIC
+
+RUN dnf install -y python3.12 python3.12-pip libcudnn9 libnccl libcusparselt0
 
 USER 0
 WORKDIR /workdir
@@ -32,14 +23,12 @@ RUN cd embeddings_model; if [ "$HERMETIC" == "true" ]; then \
         curl -L -O https://huggingface.co/sentence-transformers/all-mpnet-base-v2/resolve/9a3225965996d404b775526de6dbfe85d3368642/model.safetensors; \
     fi
 
-RUN export LD_LIBRARY_PATH=/usr/local/cuda-12/compat:$LD_LIBRARY_PATH; \
-    python3.12 -c "import torch; print(torch.version.cuda); print(torch.cuda.is_available());";
+RUN python3.12 -c "import torch; print(torch.version.cuda); print(torch.cuda.is_available());";
 
 COPY scripts .
 COPY src .
 COPY custom_processor.py .
-RUN export LD_LIBRARY_PATH=/usr/local/cuda-12/compat:$LD_LIBRARY_PATH; \
-    set -e && for OCP_VERSION in $(ls -1 ocp-product-docs-plaintext); do \
+RUN set -e && for OCP_VERSION in $(ls -1 ocp-product-docs-plaintext); do \
     python3.12 custom_processor.py -o vector_db/ocp_product_docs/${OCP_VERSION} -f ocp-product-docs-plaintext/${OCP_VERSION} -md embeddings_model -mn ${EMBEDDING_MODEL} -i ocp-product-docs-$(echo $OCP_VERSION | sed 's/\./_/g') -v ${OCP_VERSION} -r https://docs.openshift.com/container-platform/ --vector-store-type=llamastack-faiss -rbu https://github.com/openshift/runbooks/blob/master -rbp ./runbooks -w 8; \
     done
 
