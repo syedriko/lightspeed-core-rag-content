@@ -1,20 +1,11 @@
 ARG EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
-ARG FLAVOR=cpu
 ARG HERMETIC=false
 
-FROM registry.access.redhat.com/ubi9/python-312 as cpu-base
+FROM nvcr.io/nvidia/cuda:12.9.1-devel-ubi9 as lightspeed-rag-builder
 ARG EMBEDDING_MODEL
-ARG FLAVOR
-
-FROM nvcr.io/nvidia/cuda:12.9.1-devel-ubi9 as gpu-base
-ARG EMBEDDING_MODEL
-ARG FLAVOR
-RUN dnf install -y python3.12 python3.12-pip libcudnn9 libnccl libcusparselt0
-
-FROM ${FLAVOR}-base as lightspeed-rag-builder
-ARG EMBEDDING_MODEL
-ARG FLAVOR
 ARG HERMETIC
+
+RUN dnf install -y python3.12 python3.12-pip libcudnn9 libnccl libcusparselt0
 
 USER 0
 WORKDIR /workdir
