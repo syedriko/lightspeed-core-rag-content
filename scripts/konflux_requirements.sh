@@ -19,7 +19,9 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.2/cpu-u
 
 # extra wheels to be included in the wheel list, often come from build-time dependencies
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript"
+# hf-xet: sdists require Rust edition 2024 (Cargo 1.85+); RHEL 9 has 1.84. Use wheel only.
+# psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,hf-xet,psycopg2-binary"
 
 # Generate requirements list from pyproject.toml from both indexes
 uv pip compile pyproject.toml -o "$RAW_REQ_FILE" \
@@ -68,6 +70,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         fi
     fi
 done < "$RAW_REQ_FILE"
+
+# hf-xet is optional/transitive (e.g. from huggingface_hub) so may not appear in compile output; ensure it is in wheel list so we never build from source (Rust edition 2024 needs Cargo 1.85+).
+if ! grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
+    echo "hf-xet==1.2.0" >> "$WHEEL_FILE_PYPI"
+fi
 
 # replace the list of binary packages in konflux pipeline configuration
 # only the package names, not the versions, delimited by commas
