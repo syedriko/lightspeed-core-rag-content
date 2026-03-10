@@ -34,7 +34,7 @@ registry.
 
 #### Prebuilt Image
 
-There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and image with GPU support with CUDA support (size cca 12 GB).
+There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and image with CUDA support (size cca 12 GB).
 
 1. Pull the CPU variant:
 
@@ -42,10 +42,10 @@ There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and i
     podman pull quay.io/lightspeed-core/rag-content-cpu:latest
     ```
 
-2. Pull the GPU variant:
+2. Pull the CUDA variant:
 
     ```bash
-    podman pull quay.io/lightspeed-core/rag-content-gpu:latest
+    podman pull quay.io/lightspeed-core/rag-content-cuda:latest
     ```
 
 #### Official image
@@ -435,6 +435,17 @@ This compiles Python dependencies from `pyproject.toml` using `uv`, splits packa
 - `requirements-build.txt` – Build-time dependencies for source packages
 
 The script also updates the Tekton pipeline configurations (`.tekton/lightspeed-stack-*.yaml`) with the list of pre-built wheel packages.
+
+### CUDA image (Containerfile-cuda)
+
+The CUDA image uses the same layout as the CPU `Containerfile` but with a CUDA base image (`nvcr.io/nvidia/cuda:12.9.1-devel-ubi9`). Python dependencies are handled as follows:
+
+- **Hermetic (Konflux):** When `/cachi2/cachi2.env` is present, the image installs from prefetched CUDA requirement files: `requirements.hashes.wheel.cuda.txt`, `requirements.hashes.wheel.pypi.cuda.txt`, and `requirements.hashes.source.cuda.txt`. Generate those files (and update the CUDA pipeline package lists) with:
+  ```shell
+  make konflux-requirements-cuda
+  ```
+  The CUDA pipelines (`.tekton/rag-tool-push-cuda.yaml` and `.tekton/rag-tool-pull-request-cuda.yaml`) use `Containerfile-cuda` and the same prefetch flow as CPU, with CUDA-specific requirement files and `build-args-konflux-cuda.conf`.
+- **Non-hermetic:** If Cachi2 is not present, at build time `scripts/remove_pytorch_cpu_pyproject.py` removes the `pytorch-cpu` index from `pyproject.toml`, then `uv lock` and `uv sync` run so that `torch` and `torchvision` come from default PyPI (CUDA wheels).
 
 ### Updating RPM Dependencies
 
