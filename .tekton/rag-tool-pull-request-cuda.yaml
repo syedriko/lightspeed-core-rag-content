@@ -12,9 +12,9 @@ metadata:
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: rag
-    appstudio.openshift.io/component: rag-tool
+    appstudio.openshift.io/component: rag-tool-cuda
     pipelines.appstudio.openshift.io/type: build
-  name: rag-tool-on-pull-request
+  name: rag-tool-cuda-on-pull-request
   namespace: lightspeed-core-tenant
 spec:
   params:
@@ -23,24 +23,18 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/lightspeed-core-tenant/rag-tool:on-pr-{{revision}}
+    value: quay.io/redhat-user-workloads/lightspeed-core-tenant/rag-tool-cuda:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: build-platforms
     value:
     - linux/x86_64
-    - linux-c6gd2xlarge/arm64
   - name: dockerfile
-    value: Containerfile
+    value: Containerfile-cuda
   - name: build-source-image
     value: 'true'
   - name: prefetch-input
-    # no source available: torch, faiss-cpu
-    # hermeto prefetch problems: uv, pip, jiter, tiktoken,
-    # those need cmake to build: pyarrow
-    # those need cargo to build: jiter, tiktoken, cryptography, fastuuid, hf_xet, maturin, pydantic_core, rpds_py, safetensors, tokenizers
-    # to accelerate build:numpy, scipy, pandas, pillow, scikit_learn, etc.
-    # most wheels are fetched from RHOAI index
+    # CUDA hermetic build: prefetch from requirements.*.cuda.txt (torch/torchvision from PyPI CUDA).
     value: |
       [
          {
@@ -50,22 +44,22 @@ spec:
          },
          {
            "type": "rpm",
-           "path": "."
+           "path": "cuda"
          },
          {
            "type": "pip",
            "path": ".",
            "requirements_files": [
-             "requirements.hashes.wheel.txt",
-             "requirements.hashes.wheel.pypi.txt",
-             "requirements.hashes.source.txt",
+             "requirements.hashes.wheel.cuda.txt",
+             "requirements.hashes.wheel.pypi.cuda.txt",
+             "requirements.hashes.source.cuda.txt",
              "requirements.hermetic.txt"
            ],
-           "requirements_build_files": ["requirements-build.txt"],
+           "requirements_build_files": ["requirements-build.cuda.txt"],
            "binary": {
-             "packages": "aiohappyeyeballs,aiohttp,aiosignal,aiosqlite,annotated-doc,annotated-types,anyio,asyncpg,attrs,beautifulsoup4,cffi,click,colorama,cryptography,dataclasses-json,defusedxml,distro,docling-parse,et-xmlfile,faiss-cpu,filetype,fire,frozenlist,greenlet,h11,hf-xet,httpcore,httpx,idna,jinja2,jiter,joblib,jsonlines,jsonref,jsonschema-specifications,latex2mathml,lxml,markdown-it-py,markupsafe,mdurl,mpire,mpmath,mypy-extensions,nest-asyncio,networkx,numpy,openpyxl,packaging,pandas,pillow,pluggy,prompt-toolkit,propcache,psycopg2-binary,pydantic,pydantic-core,pygments,pylatexenc,pypdfium2,python-dateutil,python-docx,python-pptx,pyyaml,referencing,requests,rpds-py,rtree,safetensors,scikit-learn,scipy,setuptools,shapely,shellingham,six,sniffio,sympy,threadpoolctl,tiktoken,tokenizers,torch,torchvision,transformers,triton,typing-extensions,typing-inspect,typing-inspection,tzdata,wrapt,xlsxwriter,zipp,uv-build,uv,pip,maturin,opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,hf-xet,psycopg2-binary",
+             "packages": "aiohappyeyeballs,aiohttp,aiosignal,annotated-doc,annotated-types,antlr4-python3-runtime,attrs,beautifulsoup4,cffi,click,colorama,cryptography,dataclasses-json,defusedxml,distro,et-xmlfile,filetype,frozenlist,greenlet,h11,httpcore,httpx,idna,importlib-metadata,jinja2,jiter,joblib,jsonlines,jsonref,jsonschema,jsonschema-specifications,lxml,markdown-it-py,marko,markupsafe,marshmallow,mdurl,mpire,mpmath,mypy-extensions,nest-asyncio,networkx,numpy,omegaconf,openpyxl,pandas,pillow,pluggy,prompt-toolkit,propcache,pydantic,pydantic-core,pygments,pylatexenc,pypdfium2,python-dateutil,python-docx,python-pptx,pyyaml,referencing,requests,rpds-py,rtree,safetensors,scikit-learn,scipy,setuptools,shapely,shellingham,six,sniffio,sympy,termcolor,threadpoolctl,tiktoken,tomlkit,transformers,tree-sitter,tree-sitter-c,tree-sitter-javascript,tree-sitter-python,tree-sitter-typescript,typing-extensions,typing-inspect,typing-inspection,tzdata,urllib3,wrapt,xlsxwriter,zipp,uv-build,uv,pip,maturin,opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss,faiss-cpu,griffe,griffecli,griffelib,llama-index-vector-stores-faiss,opencv-python,psycopg2-binary,pyclipper,rapidocr,sqlite-vec,torch,torchvision",
              "os": "linux",
-             "arch": "x86_64,aarch64",
+             "arch": "x86_64",
              "py_version": 312
            }
          },
@@ -77,7 +71,7 @@ spec:
   - name: hermetic
     value: 'true'
   - name: build-args-file
-    value: build-args-konflux.conf
+    value: build-args-konflux-cuda.conf
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.

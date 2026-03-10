@@ -1,9 +1,11 @@
-# override these package to the version available on RHOAI wheels index:
+# CUDA build: same as requirements.overrides.txt but omit torch/torchvision
+# so they are resolved from default PyPI (CUDA wheels).
 # https://console.redhat.com/api/pypi/public-rhai/rhoai/3.2/cpu-ubi9/simple
 transformers==4.57.3
 tokenizers==0.22.1
 scipy==1.16.3
 numpy==2.3.5
+omegaconf==2.3.0
 aiohttp==3.13.3
 aiosqlite==0.22.0
 anyio==4.12.0
@@ -13,12 +15,10 @@ faiss-cpu==1.12.0
 setuptools==80.9
 jiter==0.12
 cryptography==46.0.3
-docling-parse==4.7.2
-docling-ibm-models==3.10
-triton==3.5.0
+docling-parse==5.3.2
+docling-ibm-models==3.12.0
+triton==3.5.1
 greenlet==3.3.0
-torch==2.9.0
-torchvision==0.24.0
 pypdfium2==4.30.0
-# Pin to 1.2.0; we fetch as wheel only (PYPI_WHEELS) — sdists need Rust 1.85+.
-hf-xet==1.2.0
+deprecated==1.2.18
+# hf-xet omitted from CUDA hermetic build: prefetch uses RHOAI only; sdists need Rust 1.85+.

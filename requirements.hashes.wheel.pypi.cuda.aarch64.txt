@@ -1,0 +1,2 @@
+faiss-cpu @ https://files.pythonhosted.org/packages/19/89/a4ba4d285ea4f9b0824bf31ebded3171da08bfcf5376f4771cc5481f72cd/faiss_cpu-1.12.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl \
+    --hash=sha256:016e391f49933875b8d60d47f282f2e93d8ea9f9ffbda82467aa771b11a237db

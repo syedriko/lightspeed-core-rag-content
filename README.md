@@ -1,4 +1,4 @@
-# RAG Content
+# RAG Content 
 
 RAG Content provides a shared codebase for generating vector databases.
 It serves as the core framework for Lightspeed-related projects (e.g., OpenShift
@@ -34,7 +34,7 @@ registry.
 
 #### Prebuilt Image
 
-There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and image with GPU support with CUDA support (size cca 12 GB).
+There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and image with CUDA support (size cca 12 GB).
 
 1. Pull the CPU variant:
 
@@ -42,10 +42,10 @@ There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and i
     podman pull quay.io/lightspeed-core/rag-content-cpu:latest
     ```
 
-2. Pull the GPU variant:
+2. Pull the CUDA variant:
 
     ```bash
-    podman pull quay.io/lightspeed-core/rag-content-gpu:latest
+    podman pull quay.io/lightspeed-core/rag-content-cuda:latest
     ```
 
 #### Official image
@@ -436,22 +436,34 @@ This compiles Python dependencies from `pyproject.toml` using `uv`, splits packa
 
 The script also updates the Tekton pipeline configurations (`.tekton/lightspeed-stack-*.yaml`) with the list of pre-built wheel packages.
 
+### CUDA image (Containerfile-cuda)
+
+The CUDA image uses the same layout as the CPU `Containerfile` but with a CUDA base image (`nvcr.io/nvidia/cuda:12.9.1-devel-ubi9`). Python dependencies are handled as follows:
+
+- **Hermetic (Konflux):** When `/cachi2/cachi2.env` is present, the image installs from prefetched CUDA requirement files: `requirements.hashes.wheel.cuda.txt`, `requirements.hashes.wheel.pypi.cuda.base.txt`, `requirements.hashes.wheel.pypi.cuda.x86_64.txt`, `requirements.hashes.wheel.pypi.cuda.aarch64.txt`, and `requirements.hashes.source.cuda.txt`. Generate those files (and update the CUDA pipeline package lists) with:
+  ```shell
+  make konflux-requirements-cuda
+  ```
+  The CUDA pipelines (`.tekton/rag-tool-push-cuda.yaml` and `.tekton/rag-tool-pull-request-cuda.yaml`) use `Containerfile-cuda` and the same prefetch flow as CPU, with CUDA-specific requirement files and `build-args-konflux-cuda.conf`.
+- **Non-hermetic:** If Cachi2 is not present, at build time `scripts/remove_pytorch_cpu_pyproject.py` removes the `pytorch-cpu` index from `pyproject.toml`, then `uv lock` and `uv sync` run so that `torch` and `torchvision` come from default PyPI (CUDA wheels).
+
 ### Updating RPM Dependencies
 
 **Prerequisites:**
+- Start with a UBI container
+- Have `dnf` installed in system
+- Install sudo, skopeo, pip, make
 - Install [rpm-lockfile-prototype](https://github.com/konflux-ci/rpm-lockfile-prototype?tab=readme-ov-file#installation)
 - Have an active RHEL Subscription, get activation keys from [RH console](https://console.redhat.com/insights/connector/activation-keys)
-- Have `dnf` installed in system
+
 
 **Steps:**
 
 1. **List your RPM packages** in `rpms.in.yaml` under the `packages` field
 
-2. **If you changed the base image**, extract its repo file:
+2. **If you changed the base image in build-args-konflux.conf**, extract its repo file:
 ```shell
-# UBI images
-podman run -it $BASE_IMAGE cat /etc/yum.repos.d/ubi.repo > ubi.repo
-# RHEL images, the current base image.
+# RHEL, the current base image.
 podman run -it $BASE_IMAGE cat /etc/yum.repos.d/redhat.repo > redhat.repo
 ```
 If the repo file contains too many entries, we can filter them and keep only required repositories.
