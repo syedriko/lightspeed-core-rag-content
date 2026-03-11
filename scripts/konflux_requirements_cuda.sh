@@ -18,7 +18,8 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda1
 
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
 # PyPI packages to fetch as binary wheels (no source build). Includes torch/CUDA and nvidia-* (binary-only on PyPI).
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision"
+# hf-xet: sdists require Rust edition 2024 (Cargo 1.85+); RHEL 9 has 1.84. Use wheel only.
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,hf-xet"
 # nvidia-* packages (torch CUDA deps) are binary-only; match by prefix in the split loop below.
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).
