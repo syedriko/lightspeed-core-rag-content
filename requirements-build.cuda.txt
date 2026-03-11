@@ -6,24 +6,24 @@
 #
 calver==2025.10.20
     # via trove-classifiers
-coherent-licensed==0.5.2
-    # via importlib-metadata
 cython==3.2.4
-    # via sqlalchemy
+    # via
+    #   asyncpg
+    #   numpy
+    #   sqlalchemy
 expandvars==1.1.2
     # via yarl
 flit-core==3.12.0
     # via
-    #   coherent-licensed
-    #   marshmallow
+    #   aiosqlite
     #   packaging
     #   pathspec
     #   pypdf
+    #   pyproject-metadata
     #   tinytag
     #   wheel
 hatch-fancy-pypi-readme==25.1.0
     # via
-    #   jsonschema
     #   llama-stack-client
     #   openai
 hatch-vcs==0.5.0
@@ -31,10 +31,7 @@ hatch-vcs==0.5.0
     #   chardet
     #   filelock
     #   fsspec
-    #   jsonschema
     #   platformdirs
-    #   termcolor
-    #   urllib3
 hatchling==1.26.3
     # via
     #   hatch-fancy-pypi-readme
@@ -50,7 +47,6 @@ hatchling==1.29.0
     #   fsspec
     #   hatch-fancy-pypi-readme
     #   hatch-vcs
-    #   jsonschema
     #   llama-cloud-services
     #   llama-index
     #   llama-index-cli
@@ -78,17 +74,23 @@ hatchling==1.29.0
     #   semchunk
     #   soupsieve
     #   starlette
-    #   termcolor
-    #   urllib3
     #   uvicorn
     #   wcwidth
 maturin==1.10.2
     # via
     #   hf-xet
+    #   tokenizers
     #   uv-build
+meson-python==0.19.0
+    # via numpy
+meson==1.10.1
+    # via meson-python
+numpy==2.4.3
+    # via faiss-cpu
 packaging==26.0
     # via
     #   hatchling
+    #   meson-python
     #   setuptools-scm
     #   wheel
 pathspec==1.0.4
@@ -96,7 +98,6 @@ pathspec==1.0.4
 pdm-backend==2.4.7
     # via
     #   fastapi
-    #   marko
     #   typer
 pluggy==1.6.0
     # via hatchling
@@ -104,48 +105,53 @@ poetry-core==2.3.1
     # via
     #   llama-cloud
     #   rich
-    #   tomlkit
+pyproject-metadata==0.11.0
+    # via meson-python
 semantic-version==2.10.0
     # via setuptools-rust
 setuptools-rust==1.12.0
     # via maturin
 setuptools-scm==9.2.2
     # via
+    #   anyio
     #   hatch-vcs
-    #   importlib-metadata
     #   llama-stack-api
     #   pluggy
     #   setuptools-rust
     #   tabulate
     #   tenacity
     #   tqdm
-    #   urllib3
 trove-classifiers==2026.1.14.14
     # via hatchling
 uv-build==0.9.30
     # via llama-index-workflows
 wheel==0.46.3
     # via
+    #   faiss-cpu
+    #   fire
+    #   meson
     #   pycparser
     #   sentence-transformers
-    #   tree-sitter-c
-    #   tree-sitter-javascript
-    #   tree-sitter-python
+    #   tornado
 
 # The following packages are considered to be unsafe in a requirements file:
 setuptools==82.0.0
     # via charset-normalizer
 setuptools==82.0.1
     # via
+    #   anyio
+    #   asyncpg
     #   calver
     #   certifi
     #   colorlog
     #   dill
+    #   faiss-cpu
+    #   fire
     #   googleapis-common-protos
-    #   importlib-metadata
     #   llama-stack
     #   llama-stack-api
     #   maturin
+    #   meson
     #   multidict
     #   multiprocess
     #   pathspec
@@ -162,10 +168,7 @@ setuptools==82.0.1
     #   sqlalchemy
     #   tabulate
     #   tenacity
+    #   tornado
     #   tqdm
-    #   tree-sitter
-    #   tree-sitter-c
-    #   tree-sitter-javascript
-    #   tree-sitter-python
     #   trove-classifiers
     #   yarl
