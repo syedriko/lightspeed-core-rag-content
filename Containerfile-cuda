@@ -10,6 +10,10 @@ RUN dnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs \
     libcudnn9 libnccl libcusparselt0 && \
     dnf clean all
 
+RUN  if [ -f /cachi2/cachi2.env ]; then \
+     dnf install -y gcc cargo cmake git && dnf clean all; \
+     fi
+
 # Install uv package manager (match CPU version constraint)
 RUN pip3.12 install "uv>=0.7.20"
 
