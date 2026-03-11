@@ -105,8 +105,9 @@ konflux-requirements:	## generate hermetic requirements.*.txt file and gemfile.l
 	./scripts/konflux_requirements.sh
 	bundle _2.2.33_ lock --add-platform aarch64-linux
 
+BASE_IMAGE := $(shell grep '^BASE_IMAGE=' build-args-konflux.conf | cut -d= -f2-)
 konflux-rpm-lock:	## generate rpm.lock.yaml file for konflux build
-	./scripts/generate-rpm-lock.sh
+	./scripts/generate-rpm-lock.sh -i $(BASE_IMAGE)
 
 ruby-bundler: # Install bundler 2.2.33, this is the version used by the container image.
 	gem install bundler -v 2.2.33
