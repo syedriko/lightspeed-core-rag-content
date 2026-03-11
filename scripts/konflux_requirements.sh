@@ -69,6 +69,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fi
 done < "$RAW_REQ_FILE"
 
+# hf-xet is optional/transitive (e.g. from huggingface_hub) so may not appear in compile output; ensure it is in wheel list so we never build from source (Rust edition 2024 needs Cargo 1.85+).
+if ! grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
+    echo "hf-xet==1.2.0" >> "$WHEEL_FILE_PYPI"
+fi
+
 # replace the list of binary packages in konflux pipeline configuration
 # only the package names, not the versions, delimited by commas
 wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')

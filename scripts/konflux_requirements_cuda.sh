@@ -18,8 +18,8 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda1
 
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
 # PyPI packages to fetch as binary wheels (no source build). Includes torch/CUDA and nvidia-* (binary-only on PyPI).
-# hf-xet: sdists require Rust edition 2024 (Cargo 1.85+); RHEL 9 has 1.84. Use wheel only.
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,hf-xet"
+# hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision"
 # nvidia-* packages (torch CUDA deps) are binary-only; match by prefix in the split loop below.
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).
@@ -94,6 +94,8 @@ echo "Packages from console.redhat.com written to: $WHEEL_FILE ($(wc -l < "$WHEE
 uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url "$RHOAI_INDEX_URL" --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
 uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$WHEEL_HASH_FILE_PYPI"
 uv pip compile "$SOURCE_FILE" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$SOURCE_HASH_FILE"
+# Prefetch cannot fetch from PyPI; omit hf-xet so hermetic build succeeds (huggingface_hub works without it).
+awk '/^hf-xet==/{skip=1; next} skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/{skip=0} !skip{print}' "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
 uv run pybuild-deps compile --output-file="$BUILD_FILE" "$SOURCE_FILE"
 
 sed -i 's/maturin==[0-9.]*/maturin==1.10.2/' "$BUILD_FILE"
