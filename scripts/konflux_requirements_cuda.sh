@@ -19,7 +19,8 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda1
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
 # PyPI packages to fetch as binary wheels (no source build). Includes torch/CUDA and nvidia-* (binary-only on PyPI).
 # hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision"
+# psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,psycopg2-binary"
 # nvidia-* packages (torch CUDA deps) are binary-only; match by prefix in the split loop below.
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).
@@ -101,7 +102,7 @@ uv run pybuild-deps compile --output-file="$BUILD_FILE" "$SOURCE_FILE"
 sed -i 's/maturin==[0-9.]*/maturin==1.10.2/' "$BUILD_FILE"
 
 # Remove intermediate files
-rm -f "$RAW_REQ_FILE" "$WHEEL_FILE" "$WHEEL_FILE_PYPI" "$SOURCE_FILE"
+rm -f "$RAW_REQ_FILE" "$WHEEL_FILE" "$WHEEL_FILE_PYPI" "$SOURCE_FILE" pyproject.cuda.toml
 
 echo "Done!"
 echo "Packages from pypi.org written to: $SOURCE_HASH_FILE ($(grep -Eo '==[0-9.]+' "$SOURCE_HASH_FILE" | wc -l) packages)"
