@@ -450,19 +450,20 @@ The CUDA image uses the same layout as the CPU `Containerfile` but with a CUDA b
 ### Updating RPM Dependencies
 
 **Prerequisites:**
+- Start with a UBI container
+- Have `dnf` installed in system
+- Install sudo, skopeo, pip
 - Install [rpm-lockfile-prototype](https://github.com/konflux-ci/rpm-lockfile-prototype?tab=readme-ov-file#installation)
 - Have an active RHEL Subscription, get activation keys from [RH console](https://console.redhat.com/insights/connector/activation-keys)
-- Have `dnf` installed in system
+
 
 **Steps:**
 
 1. **List your RPM packages** in `rpms.in.yaml` under the `packages` field
 
-2. **If you changed the base image**, extract its repo file:
+2. **If you changed the base image in build-args-konflux.conf**, extract its repo file:
 ```shell
-# UBI images
-podman run -it $BASE_IMAGE cat /etc/yum.repos.d/ubi.repo > ubi.repo
-# RHEL images, the current base image.
+# RHEL, the current base image.
 podman run -it $BASE_IMAGE cat /etc/yum.repos.d/redhat.repo > redhat.repo
 ```
 If the repo file contains too many entries, we can filter them and keep only required repositories.
