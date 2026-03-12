@@ -15,12 +15,14 @@ WHEEL_HASH_FILE="requirements.hashes.wheel.cuda.txt"
 WHEEL_HASH_FILE_PYPI="requirements.hashes.wheel.pypi.cuda.txt"
 BUILD_FILE="requirements-build.cuda.txt"
 RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/"
+# CPU RHOAI index (same version as CUDA): faiss-cpu and similar resolve from here so prefetch can fetch wheels.
+RHOAI_INDEX_URL_CPU="${RHOAI_INDEX_URL/cuda12.9-ubi9/cpu-ubi9}"
 
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
 # PyPI packages to fetch as binary wheels (no source build). Includes torch/CUDA and nvidia-* (binary-only on PyPI).
 # hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.
 # psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
-# faiss-cpu: wheel avoids SWIG/faiss C++ build from source.
+# faiss-cpu: resolved from RHOAI (CPU index) so prefetch gets the wheel; keep in wheel list.
 PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,psycopg2-binary,faiss-cpu"
 # nvidia-* packages (torch CUDA deps) are binary-only; match by prefix in the split loop below.
 
@@ -32,11 +34,13 @@ uv run python ./scripts/remove_pytorch_cpu_pyproject.py pyproject.cuda.toml
 mv pyproject.toml pyproject.toml.cpu-only
 mv pyproject.cuda.toml pyproject.toml
 
-# Generate requirements from CUDA pyproject (torch from PyPI = CUDA on Linux)
+# Generate requirements from CUDA pyproject (torch from PyPI = CUDA on Linux).
+# Use CPU RHOAI as extra index so faiss-cpu (and similar) resolve from RHOAI and prefetch can fetch wheels.
 uv pip compile pyproject.toml -o "$RAW_REQ_FILE" \
 	--python-version 3.12 \
 	--refresh \
 	--index "$RHOAI_INDEX_URL" \
+	--extra-index-url "$RHOAI_INDEX_URL_CPU" \
 	--default-index https://pypi.org/simple/ \
 	--index-strategy unsafe-best-match \
 	--emit-index-annotation \
@@ -71,7 +75,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
                 else
                     echo "$current_package" >> "$SOURCE_FILE"
                 fi
-            elif [[ "$index_url" == "$RHOAI_INDEX_URL" ]]; then
+            elif [[ "$index_url" == "$RHOAI_INDEX_URL" || "$index_url" == "$RHOAI_INDEX_URL_CPU" ]]; then
                 echo "$current_package" >> "$WHEEL_FILE"
             fi
             current_package=""
@@ -92,8 +96,10 @@ done
 echo "Packages from pypi.org written to: $SOURCE_FILE ($(wc -l < "$SOURCE_FILE") packages)"
 echo "Packages from console.redhat.com written to: $WHEEL_FILE ($(wc -l < "$WHEEL_FILE") packages)"
 
-# Generate hashed requirement files
-uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url "$RHOAI_INDEX_URL" --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
+# Generate hashed requirement files (wheel file may contain packages from CPU RHOAI, so pass both indexes).
+uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url "$RHOAI_INDEX_URL" --extra-index-url "$RHOAI_INDEX_URL_CPU" --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
+# uv does not emit --extra-index-url; add CPU RHOAI so prefetch can fetch packages (e.g. faiss-cpu) that came from that index.
+sed -i "3a--extra-index-url $RHOAI_INDEX_URL_CPU" "$WHEEL_HASH_FILE"
 uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$WHEEL_HASH_FILE_PYPI"
 uv pip compile "$SOURCE_FILE" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$SOURCE_HASH_FILE"
 # Prefetch cannot fetch from PyPI; omit hf-xet so hermetic build succeeds (huggingface_hub works without it).
