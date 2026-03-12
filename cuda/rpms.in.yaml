@@ -9,6 +9,7 @@ packages:
     python3.12-pip,
     git,
     libpq-devel,
+    swig,
     libcudnn9,
     libnccl,
     libcusparselt0
