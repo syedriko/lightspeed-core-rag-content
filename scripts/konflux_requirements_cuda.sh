@@ -97,6 +97,8 @@ uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --python-version 3
 uv pip compile "$SOURCE_FILE" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$SOURCE_HASH_FILE"
 # Prefetch cannot fetch from PyPI; omit hf-xet so hermetic build succeeds (huggingface_hub works without it).
 awk '/^hf-xet==/{skip=1; next} skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/{skip=0} !skip{print}' "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
+# Only install psycopg2-binary from wheel list (avoids pg_config); strip from source in case it appears there.
+awk '/^psycopg2-binary==/{skip=1; next} skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/{skip=0} !skip{print}' "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
 uv run pybuild-deps compile --output-file="$BUILD_FILE" "$SOURCE_FILE"
 
 sed -i 's/maturin==[0-9.]*/maturin==1.10.2/' "$BUILD_FILE"

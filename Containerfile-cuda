@@ -10,8 +10,9 @@ RUN dnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs \
     libcudnn9 libnccl libcusparselt0 && \
     dnf clean all
 
+# Build-from-source deps for hermetic install (e.g. psycopg2-binary sdist when prefetch has no PyPI wheel).
 RUN  if [ -f /cachi2/cachi2.env ]; then \
-     dnf install -y gcc cargo cmake git && dnf clean all; \
+     dnf install -y gcc cargo cmake git libpq-devel && dnf clean all; \
      fi
 
 # Install uv package manager (match CPU version constraint)

@@ -452,7 +452,7 @@ The CUDA image uses the same layout as the CPU `Containerfile` but with a CUDA b
 **Prerequisites:**
 - Start with a UBI container
 - Have `dnf` installed in system
-- Install sudo, skopeo, pip
+- Install sudo, skopeo, pip, make
 - Install [rpm-lockfile-prototype](https://github.com/konflux-ci/rpm-lockfile-prototype?tab=readme-ov-file#installation)
 - Have an active RHEL Subscription, get activation keys from [RH console](https://console.redhat.com/insights/connector/activation-keys)
 
