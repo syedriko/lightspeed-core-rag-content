@@ -440,7 +440,7 @@ The script also updates the Tekton pipeline configurations (`.tekton/lightspeed-
 
 The CUDA image uses the same layout as the CPU `Containerfile` but with a CUDA base image (`nvcr.io/nvidia/cuda:12.9.1-devel-ubi9`). Python dependencies are handled as follows:
 
-- **Hermetic (Konflux):** When `/cachi2/cachi2.env` is present, the image installs from prefetched CUDA requirement files: `requirements.hashes.wheel.cuda.txt`, `requirements.hashes.wheel.pypi.cuda.txt`, and `requirements.hashes.source.cuda.txt`. Generate those files (and update the CUDA pipeline package lists) with:
+- **Hermetic (Konflux):** When `/cachi2/cachi2.env` is present, the image installs from prefetched CUDA requirement files: `requirements.hashes.wheel.cuda.txt`, `requirements.hashes.wheel.pypi.cuda.base.txt`, `requirements.hashes.wheel.pypi.cuda.x86_64.txt`, `requirements.hashes.wheel.pypi.cuda.aarch64.txt`, and `requirements.hashes.source.cuda.txt`. Generate those files (and update the CUDA pipeline package lists) with:
   ```shell
   make konflux-requirements-cuda
   ```
