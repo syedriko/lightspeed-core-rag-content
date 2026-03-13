@@ -111,37 +111,47 @@ uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url "$RHOAI_IND
 # Pin omegaconf to 2.3.0+ so pip 24.1+ accepts metadata (2.0.6 uses deprecated PyYAML >=5.1.*).
 sed -i 's/^omegaconf==[0-9.]*/omegaconf==2.3.0/' "$WHEEL_FILE_PYPI"
 uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --only-binary ':all:' --python-version 3.12 --emit-index-url --no-annotate > "$WHEEL_HASH_FILE_PYPI"
-# faiss-cpu: prefetch fetches sdist when both hashes are present; use direct wheel URL so prefetch gets the wheel and pip never builds from source.
-# Prefetch (Cachi2) requires plain URL + --hash=sha256:... (not #sha256= in URL); use direct wheel URL so prefetch fetches the wheel.
-faiss_version=$(awk '/^faiss-cpu==/ { match($0, /[0-9]+\.[0-9]+\.[0-9]+/); print substr($0, RSTART, RLENGTH); exit }' "$WHEEL_HASH_FILE_PYPI")
+# faiss-cpu: use direct wheel URLs so prefetch fetches only wheels (no sdist) and the build never tries to build from source.
+# File has both arches; Containerfile filters to the single faiss-cpu line for TARGETARCH so pip installs only one wheel.
+faiss_version=$(awk '/^faiss-cpu==/ { match($0, /[0-9]+\.[0-9]+\.[0-9]+/); print substr($0, RSTART, RLENGTH); exit } /^faiss-cpu @ / { if (match($0, /faiss_cpu-[0-9]+\.[0-9]+\.[0-9]+/)) { print substr($0, RSTART+9, RLENGTH-9); exit } }' "$WHEEL_HASH_FILE_PYPI")
 if [ -n "$faiss_version" ]; then
-  FAISS_CPU_WHEEL_SPEC=$(python3 -c "
+  FAISS_CPU_SPEC=$(python3 -c "
 import urllib.request, json, sys
 ver = sys.argv[1]
 url = f'https://pypi.org/pypi/faiss-cpu/{ver}/json'
 with urllib.request.urlopen(url) as r:
     d = json.load(r)
+wheels = []
 for u in d.get('urls', []):
-    if (u.get('packagetype') == 'bdist_wheel' and 'cp312' in u.get('filename', '') and 'manylinux' in u.get('filename', '') and 'x86_64' in u.get('filename', '')):
-        print(u['url'])
-        print(u['digests']['sha256'])
-        break
-else:
+    if (u.get('packagetype') == 'bdist_wheel' and 'cp312' in u.get('filename', '') and 'manylinux' in u.get('filename', '')):
+        wheels.append((u['filename'], u['url'], u['digests'].get('sha256')))
+wheels.sort(key=lambda x: x[0])
+if len(wheels) < 2:
     sys.exit(1)
-" "$faiss_version") || { echo "Could not get faiss-cpu wheel URL from PyPI for version $faiss_version"; exit 1; }
-  FAISS_CPU_WHEEL_URL=$(echo "$FAISS_CPU_WHEEL_SPEC" | head -1)
-  FAISS_CPU_WHEEL_HASH=$(echo "$FAISS_CPU_WHEEL_SPEC" | tail -1)
-  awk -v url="$FAISS_CPU_WHEEL_URL" -v hash="$FAISS_CPU_WHEEL_HASH" '
-/^faiss-cpu==/ {
-  print "faiss-cpu @ " url " \\"
-  print "    --hash=sha256:" hash
+for fn, u, h in wheels:
+    print(u)
+    print(h)
+" "$faiss_version") || { echo "Could not get faiss-cpu wheel URLs (x86_64 and aarch64) from PyPI for version $faiss_version"; exit 1; }
+  FAISS_URL_1=$(echo "$FAISS_CPU_SPEC" | sed -n '1p')
+  FAISS_HASH_1=$(echo "$FAISS_CPU_SPEC" | sed -n '2p')
+  FAISS_URL_2=$(echo "$FAISS_CPU_SPEC" | sed -n '3p')
+  FAISS_HASH_2=$(echo "$FAISS_CPU_SPEC" | sed -n '4p')
+  awk -v url1="$FAISS_URL_1" -v hash1="$FAISS_HASH_1" -v url2="$FAISS_URL_2" -v hash2="$FAISS_HASH_2" '
+/^faiss-cpu==/ || /^faiss-cpu @ / {
+  print "faiss-cpu @ " url1 " \\"
+  print "    --hash=sha256:" hash1
+  print "faiss-cpu @ " url2 " \\"
+  print "    --hash=sha256:" hash2
   skip=1
   next
 }
-skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/ { skip=0 }
-skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]* @ / { skip=0 }
+skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*(==| @ )/ && $0 !~ /^faiss-cpu/ { skip=0 }
 !skip { print }
 ' "$WHEEL_HASH_FILE_PYPI" > "$WHEEL_HASH_FILE_PYPI.tmp" && mv "$WHEEL_HASH_FILE_PYPI.tmp" "$WHEEL_HASH_FILE_PYPI"
+  # Arch files: only the one faiss-cpu block per arch (base is generated at end, after omegaconf/deprecated).
+  # Wheels are sorted by filename: aarch64 then x86_64, so URL_1/HASH_1 = aarch64, URL_2/HASH_2 = x86_64.
+  printf 'faiss-cpu @ %s \\\n    --hash=sha256:%s\n' "$FAISS_URL_1" "$FAISS_HASH_1" > "${WHEEL_HASH_FILE_PYPI%.txt}.aarch64.txt"
+  printf 'faiss-cpu @ %s \\\n    --hash=sha256:%s\n' "$FAISS_URL_2" "$FAISS_HASH_2" > "${WHEEL_HASH_FILE_PYPI%.txt}.x86_64.txt"
 fi
 # Replace omegaconf 2.0.6 with 2.3.0 so pip 24.1+ accepts metadata (2.0.6 uses deprecated PyYAML >=5.1.*).
 OMEGACONF_SPEC=$(python3 -c "
@@ -207,6 +217,9 @@ awk 'FNR==NR { if (/^[a-zA-Z0-9].*(==| @ )/) { match($0, /^[a-zA-Z0-9][a-zA-Z0-9
      /^--index-url/ { print; next }
      /^[a-zA-Z0-9].*(==| @ )/ { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); name=substr($0,RSTART,RLENGTH); skip=(name in p); if (!skip) print; next }
      { if (!skip) print }' "$WHEEL_HASH_FILE_PYPI" "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
+# PyPI wheels: emit base (all packages minus faiss-cpu) and remove full file; prefetch uses base + .x86_64.txt + .aarch64.txt.
+awk '/^faiss-cpu @ / { getline; next } { print }' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI%.txt}.base.txt"
+rm -f "$WHEEL_HASH_FILE_PYPI"
 # faiss-cpu from CPU RHOAI is in source list; prefetch will get it from PyPI when processing that file (or build from sdist).
 # pybuild-deps needs source (sdist); exclude wheel-only packages (torch, torchvision, triton, nvidia-*, faiss-cpu) that may have landed in source list.
 grep -v -E '^(torch|torchvision|faiss-cpu|triton|nvidia-[a-zA-Z0-9_-]+)==' "$SOURCE_FILE" > "$SOURCE_FILE.build"
@@ -221,6 +234,6 @@ rm -f "$RAW_REQ_FILE" "$WHEEL_FILE" "$WHEEL_FILE_PYPI" "$SOURCE_FILE" pyproject.
 echo "Done!"
 echo "Packages from pypi.org written to: $SOURCE_HASH_FILE ($(grep -Eo '==[0-9.]+' "$SOURCE_HASH_FILE" | wc -l) packages)"
 echo "Packages from console.redhat.com written to: $WHEEL_HASH_FILE ($(grep -Eo '==[0-9.]+' "$WHEEL_HASH_FILE" | wc -l) packages)"
-echo "Packages from pypi.org (wheels) written to: $WHEEL_HASH_FILE_PYPI ($(grep -Eo '==[0-9.]+' "$WHEEL_HASH_FILE_PYPI" | wc -l) packages)"
+echo "Packages from pypi.org (wheels) written to: ${WHEEL_HASH_FILE_PYPI%.txt}.base.txt + .x86_64.txt + .aarch64.txt ($(grep -Eo '==[0-9.]+' "${WHEEL_HASH_FILE_PYPI%.txt}.base.txt" | wc -l) in base, faiss-cpu per arch)"
 echo "Build dependencies written to: $BUILD_FILE ($(grep -Eo '==[0-9.]+' "$BUILD_FILE" | wc -l) packages)"
 echo "Remember to commit the .cuda.txt requirement files, pipeline configurations and push the changes"
