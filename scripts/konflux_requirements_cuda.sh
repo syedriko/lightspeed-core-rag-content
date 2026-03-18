@@ -1,8 +1,20 @@
 #!/bin/bash
 
 # Generate hermetic requirements for CUDA Konflux build.
-# Uses a copy of pyproject.toml with  pytorch-cpu index removed so torch/torchvision
-# resolve from default PyPI (CUDA wheels). Same split as CPU: RHOAI wheels vs PyPI.
+# Uses a copy of pyproject.toml with pytorch-cpu index removed so torch/torchvision
+# can resolve from PyPI (CUDA on x86_64) or RHOAI. Same split as CPU: RHOAI wheels vs PyPI.
+#
+# Why torch/torchvision were not from RHOAI initially: requirements.overrides.cuda.txt
+# omits them so they resolve from default PyPI (newer 2.9.1 / 0.24.1). uv then annotates
+# them "from pypi.org", so they land in the PyPI wheel file. On aarch64 PyPI only has
+# CPU wheels, so we append RHOAI torch/torchvision URLs to the aarch64 file.
+#
+# Other packages available from RHOAI (cuda12.9-ubi9): see the full list at
+#   https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/
+# The resolver already uses RHOAI as first index; packages it picks from RHOAI go to
+# requirements.hashes.wheel.cuda.txt. To prefer RHOAI for more packages, add version
+# overrides that exist on RHOAI (e.g. in requirements.overrides.cuda.txt) so uv
+# resolves them from RHOAI instead of PyPI.
 
 set -ex
 
@@ -29,8 +41,20 @@ PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffe
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).
 # uv pip compile only accepts pyproject.toml, so swap temporarily.
+# Restore pyproject.toml and uv.lock on exit (success or failure) so we never leave the repo with the CUDA variant.
+# uv pip compile can update uv.lock when run with the swapped pyproject.toml.
+restore_pyproject() {
+	if [ -f pyproject.toml.cpu-only ]; then
+		mv -f pyproject.toml pyproject.cuda.toml 2>/dev/null || true
+		mv -f pyproject.toml.cpu-only pyproject.toml
+		[ -f uv.lock.cpu-only ] && mv -f uv.lock.cpu-only uv.lock
+	fi
+	rm -f pyproject.cuda.toml pyproject.cpu.bak.toml uv.lock.cpu-only
+}
+trap restore_pyproject EXIT
 cp pyproject.toml pyproject.cpu.bak.toml
 cp pyproject.toml pyproject.cuda.toml
+[ -f uv.lock ] && cp uv.lock uv.lock.cpu-only
 uv run python ./scripts/remove_pytorch_cpu_pyproject.py pyproject.cuda.toml
 mv pyproject.toml pyproject.toml.cpu-only
 mv pyproject.cuda.toml pyproject.toml
@@ -48,10 +72,11 @@ uv pip compile pyproject.toml -o "$RAW_REQ_FILE" \
 	--no-sources \
 	--override requirements.overrides.cuda.txt
 
-# Restore original pyproject.toml
+# Restore original pyproject.toml and uv.lock (trap will also run on exit and clean up)
 mv pyproject.toml pyproject.cuda.toml
 mv pyproject.toml.cpu-only pyproject.toml
-rm -f pyproject.cpu.bak.toml
+[ -f uv.lock.cpu-only ] && mv -f uv.lock.cpu-only uv.lock
+rm -f pyproject.cpu.bak.toml uv.lock.cpu-only
 
 # Initialize output files
 echo "# Packages from pypi.org (CUDA build)" > "$SOURCE_FILE"
@@ -152,6 +177,21 @@ skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*(==| @ )/ && $0 !~ /^faiss-cpu/ { skip=0 }
   # Wheels are sorted by filename: aarch64 then x86_64, so URL_1/HASH_1 = aarch64, URL_2/HASH_2 = x86_64.
   printf 'faiss-cpu @ %s \\\n    --hash=sha256:%s\n' "$FAISS_URL_1" "$FAISS_HASH_1" > "${WHEEL_HASH_FILE_PYPI%.txt}.aarch64.txt"
   printf 'faiss-cpu @ %s \\\n    --hash=sha256:%s\n' "$FAISS_URL_2" "$FAISS_HASH_2" > "${WHEEL_HASH_FILE_PYPI%.txt}.x86_64.txt"
+  # aarch64: PyPI only has CPU torch/torchvision. Use RHOAI for both (already prefetched).
+  # RHOAI index: https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/
+  RHOAI_PULP="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9"
+  AARCH64_TORCH_URL="${RHOAI_PULP}/torch-2.9.0-13-cp312-cp312-linux_aarch64.whl"
+  AARCH64_TORCH_HASH="5059b9516b74ad4a7a5d37a9243d749d957ee002378960ce5c67f7bb23fc8154"
+  AARCH64_TORCHVISION_URL="${RHOAI_PULP}/torchvision-0.24.0-9-cp312-cp312-linux_aarch64.whl"
+  AARCH64_TORCHVISION_HASH="569d6ab37fb575f514d04c04706a65fc599f24c7b6264b44e54b9b9c017e353a"
+  {
+    echo ""
+    echo "# aarch64 CUDA: torch and torchvision from RHOAI (PyPI only has CPU on aarch64)"
+    echo "torch @ ${AARCH64_TORCH_URL} \\"
+    echo "    --hash=sha256:${AARCH64_TORCH_HASH}"
+    echo "torchvision @ ${AARCH64_TORCHVISION_URL} \\"
+    echo "    --hash=sha256:${AARCH64_TORCHVISION_HASH}"
+  } >> "${WHEEL_HASH_FILE_PYPI%.txt}.aarch64.txt"
 fi
 # Replace omegaconf 2.0.6 with 2.3.0 so pip 24.1+ accepts metadata (2.0.6 uses deprecated PyYAML >=5.1.*).
 OMEGACONF_SPEC=$(python3 -c "
@@ -217,8 +257,30 @@ awk 'FNR==NR { if (/^[a-zA-Z0-9].*(==| @ )/) { match($0, /^[a-zA-Z0-9][a-zA-Z0-9
      /^--index-url/ { print; next }
      /^[a-zA-Z0-9].*(==| @ )/ { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); name=substr($0,RSTART,RLENGTH); skip=(name in p); if (!skip) print; next }
      { if (!skip) print }' "$WHEEL_HASH_FILE_PYPI" "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
-# PyPI wheels: emit base (all packages minus faiss-cpu) and remove full file; prefetch uses base + .x86_64.txt + .aarch64.txt.
-awk '/^faiss-cpu @ / { getline; next } { print }' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI%.txt}.base.txt"
+# PyPI wheels: emit base (all packages minus faiss-cpu, torch, torchvision) and remove full file.
+# torch/torchvision are arch-specific: x86_64 from PyPI (in .x86_64.txt), aarch64 from RHOAI (in .aarch64.txt).
+# So prefetch does not fetch PyPI torch/torchvision for both arches (which would pull the unused aarch64 CPU wheel).
+awk '
+/^faiss-cpu @ / { getline; next }
+/^torch==/ { skip=1; next }
+/^torchvision==/ { skip=1; next }
+skip && /^[[:space:]]/ { next }
+skip && /^[a-zA-Z0-9]/ { skip=0 }
+skip { next }
+{ print }
+' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI%.txt}.base.txt"
+# x86_64: add torch and torchvision from RHOAI (same version as aarch64: 2.9.0-13 / 0.24.0-9) so all arches use the same version.
+RHOAI_PULP="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9"
+if [ -f "${WHEEL_HASH_FILE_PYPI%.txt}.x86_64.txt" ]; then
+  {
+    echo ""
+    echo "# x86_64: torch and torchvision from RHOAI (same version as aarch64)"
+    echo "torch @ ${RHOAI_PULP}/torch-2.9.0-13-cp312-cp312-linux_x86_64.whl \\"
+    echo "    --hash=sha256:6a331fdd10983a88751dcc0e5175a2e4c432225774bbb7931c1d249b55a40816"
+    echo "torchvision @ ${RHOAI_PULP}/torchvision-0.24.0-9-cp312-cp312-linux_x86_64.whl \\"
+    echo "    --hash=sha256:c1b4ffe7435b2a6e4c849b1be3b1f50d8f1fcb5a9c1bbe6f38e59af57eb27abb"
+  } >> "${WHEEL_HASH_FILE_PYPI%.txt}.x86_64.txt"
+fi
 rm -f "$WHEEL_HASH_FILE_PYPI"
 # faiss-cpu from CPU RHOAI is in source list; prefetch will get it from PyPI when processing that file (or build from sdist).
 # pybuild-deps needs source (sdist); exclude wheel-only packages (torch, torchvision, triton, nvidia-*, faiss-cpu) that may have landed in source list.

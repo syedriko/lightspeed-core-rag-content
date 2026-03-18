@@ -1,6 +1,7 @@
 # CUDA build: same as requirements.overrides.txt but omit torch/torchvision
-# so they are resolved from default PyPI (CUDA wheels).
-# https://console.redhat.com/api/pypi/public-rhai/rhoai/3.2/cpu-ubi9/simple
+# so they resolve from default PyPI on x86_64 (CUDA 2.9.1/0.24.1). On aarch64 the
+# script appends RHOAI torch/torchvision URLs (2.9.0-13 / 0.24.0-9) to the arch file.
+# RHOAI package list: https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/
 transformers==4.57.3
 tokenizers==0.22.1
 scipy==1.16.3

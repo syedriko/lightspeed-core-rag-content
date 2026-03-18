@@ -46,6 +46,7 @@ flit-core==3.12.0
     #   wheel
 hatch-fancy-pypi-readme==25.1.0
     # via
+    #   llama-cloud
     #   llama-stack-client
     #   openai
 hatch-vcs==0.5.0
@@ -59,6 +60,7 @@ hatch-vcs==0.5.0
 hatchling==1.26.3
     # via
     #   hatch-fancy-pypi-readme
+    #   llama-cloud
     #   llama-stack-client
     #   openai
 hatchling==1.29.0
@@ -75,7 +77,6 @@ hatchling==1.29.0
     #   hatch-vcs
     #   humanize
     #   latex2mathml
-    #   llama-cloud-services
     #   llama-index
     #   llama-index-cli
     #   llama-index-core
@@ -87,7 +88,6 @@ hatchling==1.29.0
     #   llama-index-readers-file
     #   llama-index-readers-llama-parse
     #   llama-index-vector-stores-postgres
-    #   llama-parse
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-http
@@ -115,6 +115,7 @@ maturin==1.10.2
     #   uv-build
 packaging==26.0
     # via
+    #   delocate
     #   hatchling
     #   scikit-build-core
     #   setuptools-scm
@@ -135,7 +136,7 @@ pluggy==1.6.0
     # via hatchling
 poetry-core==2.3.1
     # via
-    #   llama-cloud
+    #   llama-parse
     #   rich
 pybind11==3.0.2
     # via docling-parse
@@ -172,7 +173,6 @@ uv-build==0.9.30
 wheel==0.46.3
     # via
     #   bashlex
-    #   cibuildwheel
     #   docling-parse
     #   fire
     #   pycparser
