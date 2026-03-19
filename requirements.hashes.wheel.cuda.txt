@@ -115,8 +115,14 @@ tree-sitter-python==0.25.0 \
 tree-sitter-typescript==0.23.2 \
     --hash=sha256:a4915a289864ce06ebfe4c4075f0cc15113c1c308f23dd3294fdc528b0fcb94d \
     --hash=sha256:f01d40c371bd4009a99b803836b9a0ef6e23597cb5c5c632d3bed5250ac6b5bb
+triton==3.5.0 \
+    --hash=sha256:09a79ee525e5629092c74da51c6cb4fc13b4bddf8b3ecb54e88bd3c8d57d779e \
+    --hash=sha256:36b25d42aa96012f3e8ad649c0a1d120bc040b2af5e713d71d29f777a521a30d
 tzdata==2025.3 \
     --hash=sha256:0e3432ba6d7e6ca7800e829b9f7fcc74dc636d4e20326c91d088dc3e39188951
+wrapt==1.17.3 \
+    --hash=sha256:1a7d148b73f27a8dcdaf594783e71f30727a2d09d861f74d84308ae33cceae09 \
+    --hash=sha256:4d67a66255fbde88ea056abb714514ab6cf7dfe08e411b2b5d2a1a25d53abf5f
 xlsxwriter==3.2.9 \
     --hash=sha256:80e882be04cccad46889d9982f23f28b00a9f79f73baabb02ff7d81804e317fd
 zipp==3.23.0 \

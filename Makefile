@@ -108,6 +108,10 @@ konflux-requirements:	## generate hermetic requirements.*.txt file and gemfile.l
 konflux-requirements-cuda:	## generate hermetic requirements.*.cuda.txt for CUDA konflux build
 	./scripts/konflux_requirements_cuda.sh
 
+list-wheel-requires-dist:	## print Requires-Dist from a wheel URL (pass WHEEL_URL=...)
+	@test -n "$(WHEEL_URL)" || (echo 'Set WHEEL_URL to a .whl HTTP(S) URL, e.g. RHOAI pulp.' && exit 1)
+	python3 scripts/list_wheel_requires_dist.py "$(WHEEL_URL)"
+
 BASE_IMAGE := $(shell grep '^BASE_IMAGE=' build-args-konflux.conf | cut -d= -f2-)
 konflux-rpm-lock:	## generate rpm.lock.yaml file for konflux build
 	./scripts/generate-rpm-lock.sh -i $(BASE_IMAGE)

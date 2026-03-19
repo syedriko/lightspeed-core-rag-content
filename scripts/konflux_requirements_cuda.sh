@@ -1,13 +1,17 @@
 #!/bin/bash
 
 # Generate hermetic requirements for CUDA Konflux build.
-# Uses a copy of pyproject.toml with pytorch-cpu index removed so torch/torchvision
-# can resolve from PyPI (CUDA on x86_64) or RHOAI. Same split as CPU: RHOAI wheels vs PyPI.
+# Uses a copy of pyproject.toml with pytorch-cpu index removed so torch/torchvision can resolve
+# from RHOAI (indices below) before PyPI.
 #
-# torch/torchvision: primary resolution uses RHOAI (cuda index first). Hermetic pip install
-# uses RHOAI pulp wheel URLs in requirements.hashes.wheel.pypi.cuda.{x86_64,aarch64}.txt
-# (not PyPI torch). PyPI may still supply other CUDA-related wheels (e.g. nvidia-* cu12)
-# when the resolver emits them as separate lines from pypi.org.
+# Policy — RHOAI torch is canonical for hermetic CUDA images:
+#   The installed wheel is from RHOAI pulp (cuda12.9-ubi9), not PyPI CUDA torch. Its METADATA
+#   Requires-Dist is the dependency contract (inspect any wheel: scripts/list_wheel_requires_dist.py).
+#   Runtime deps must be satisfied in the image; where RHOAI publishes wheels (cuda12.9-ubi9 or
+#   cpu-ubi9), use those—not PyPI's separate CUDA torch stack. PyPI CUDA torch adds nvidia-* cu12
+#   wheels; RHOAI torch does *not* declare those in METADATA, so do not treat them as required
+#   companions to RHOAI torch. triton is declared (e.g. triton==3.5.0) and is installed from
+#   RHOAI cpu-ubi9 pulp URLs in the arch-specific requirement files.
 #
 # Other packages available from RHOAI (cuda12.9-ubi9): see the full list at
 #   https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/
@@ -31,14 +35,16 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda1
 RHOAI_INDEX_URL_CPU="${RHOAI_INDEX_URL/cuda12.9-ubi9/cpu-ubi9}"
 
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
-# PyPI packages to fetch as binary wheels (no source build). Includes nvidia-* (binary-only on PyPI);
-# torch/torchvision install URLs are overridden per arch (RHOAI pulp), not PyPI.
+# PyPI wheel list: binary-only packages for the second uv compile. torch/torchvision/triton are
+# stripped before that compile and installed from RHOAI pulp in the arch files (see policy above).
 # hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.
 # psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
 # faiss-cpu: resolved from RHOAI (CPU index) so prefetch gets the wheel; keep in wheel list.
 # llama-index-vector-stores-faiss: wheel-only so prefetch does not build it (and thus faiss-cpu) from source.
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss"
-# nvidia-* packages (torch CUDA deps) are binary-only; match by prefix in the split loop below.
+# triton: listed for Tekton prefetch package names. Like torch/torchvision, do not pass triton through the
+# second `uv pip compile` (PyPI-only)—install RHOAI cpu-ubi9 wheels from arch files (torch declares triton==3.5.0).
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss"
+# Split loop: lines matching nvidia-* from pypi.org go to this file if present (not used by RHOAI torch).
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).
 # uv pip compile only accepts pyproject.toml, so swap temporarily.
@@ -123,13 +129,16 @@ done < "$RAW_REQ_FILE"
 # resolves PyPI's CUDA torch and pulls in nvidia-* cu12 wheels—even though hermetic install uses RHOAI
 # pulp wheels from requirements.hashes.wheel.pypi.cuda.{x86_64,aarch64}.txt. Strip torch/torchvision
 # so the second compile cannot re-expand PyPI CUDA torch deps (spurious nvidia-*).
-grep -vE '^(torch|torchvision)(==|[[:space:]]+@)' "$WHEEL_FILE_PYPI" > "${WHEEL_FILE_PYPI}.tmp" && mv "${WHEEL_FILE_PYPI}.tmp" "$WHEEL_FILE_PYPI"
+grep -vE '^(torch|torchvision|triton)(==|[[:space:]]+@)' "$WHEEL_FILE_PYPI" > "${WHEEL_FILE_PYPI}.tmp" && mv "${WHEEL_FILE_PYPI}.tmp" "$WHEEL_FILE_PYPI"
 
 # Update CUDA pipeline configs with binary package list (RHOAI + extra + PyPI wheels including torch/nvidia-*)
 wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
 pypi_wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE_PYPI" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
 wheel_packages="$wheel_packages,$EXTRA_WHEELS,$PYPI_WHEELS,$pypi_wheel_packages"
-for f in .tekton/rag-tool-pull-request-cuda.yaml .tekton/rag-tool-push-cuda.yaml; do
+# Merge can repeat names (e.g. triton from WHEEL_FILE and PYPI_WHEELS; PyPI wheels also in PYPI_WHEELS).
+wheel_packages=$(printf '%s' "$wheel_packages" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)
+# Update CUDA pipeline configs (c0ec3 only; do not modify rag-tool-*-cuda.yaml).
+for f in .tekton/lightspeed-core-rag-content-c0ec3-pull-request.yaml .tekton/lightspeed-core-rag-content-c0ec3-push.yaml; do
     if [[ -f "$f" ]]; then
         sed -i 's/"packages": "[^"]*"/"packages": "'"$wheel_packages"'"/' "$f"
     fi
@@ -193,6 +202,9 @@ skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*(==| @ )/ && $0 !~ /^faiss-cpu/ { skip=0 }
   AARCH64_TORCH_HASH="5059b9516b74ad4a7a5d37a9243d749d957ee002378960ce5c67f7bb23fc8154"
   AARCH64_TORCHVISION_URL="${RHOAI_PULP}/torchvision-0.24.0-9-cp312-cp312-linux_aarch64.whl"
   AARCH64_TORCHVISION_HASH="569d6ab37fb575f514d04c04706a65fc599f24c7b6264b44e54b9b9c017e353a"
+  RHOAI_PULP_CPU="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cpu-ubi9"
+  AARCH64_TRITON_URL="${RHOAI_PULP_CPU}/triton-3.5.0-3-cp312-cp312-linux_aarch64.whl"
+  AARCH64_TRITON_HASH="a46eaadd18e726ff38f9cfb53c4e641dfe937741394cdf45e2981858200fae1d"
   {
     echo ""
     echo "# aarch64 CUDA: torch and torchvision from RHOAI (PyPI only has CPU on aarch64)"
@@ -200,6 +212,9 @@ skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*(==| @ )/ && $0 !~ /^faiss-cpu/ { skip=0 }
     echo "    --hash=sha256:${AARCH64_TORCH_HASH}"
     echo "torchvision @ ${AARCH64_TORCHVISION_URL} \\"
     echo "    --hash=sha256:${AARCH64_TORCHVISION_HASH}"
+    echo "# triton from RHOAI cpu-ubi9 (declared by RHOAI torch METADATA)"
+    echo "triton @ ${AARCH64_TRITON_URL} \\"
+    echo "    --hash=sha256:${AARCH64_TRITON_HASH}"
   } >> "${WHEEL_HASH_FILE_PYPI%.txt}.aarch64.txt"
 fi
 # Replace omegaconf 2.0.6 with 2.3.0 so pip 24.1+ accepts metadata (2.0.6 uses deprecated PyYAML >=5.1.*).
@@ -243,6 +258,12 @@ skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/ { skip=0 }
 skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]* @ / { skip=0 }
 !skip { print }
 ' "$WHEEL_HASH_FILE_PYPI" > "$WHEEL_HASH_FILE_PYPI.tmp" && mv "$WHEEL_HASH_FILE_PYPI.tmp" "$WHEEL_HASH_FILE_PYPI"
+# wrapt: first pass pins 1.17.x in requirements.hashes.wheel.cuda.txt (RHOAI, satisfies deprecated<2).
+# The second PyPI compile can still add wrapt 2.x as a transitive dep; dedup below would drop RHOAI and keep
+# PyPI (wrong). Strip wrapt from the PyPI wheel file when RHOAI already provides it.
+if grep -q '^wrapt==' "$WHEEL_HASH_FILE"; then
+	awk '/^wrapt==/{skip=1; next} skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*(==| @ )/{skip=0} skip && /^[[:space:]]*--hash=/{next} !skip{print}' "$WHEEL_HASH_FILE_PYPI" > "$WHEEL_HASH_FILE_PYPI.tmp" && mv "$WHEEL_HASH_FILE_PYPI.tmp" "$WHEEL_HASH_FILE_PYPI"
+fi
 # Deduplicate: prefetch may fetch from PyPI for packages in both files; pip then sees one wheel (PyPI hash). Remove from RHOAI wheel file any package also in PyPI wheel file so hashes match.
 awk 'FNR==NR { if (/^[a-zA-Z0-9].*(==| @ )/) { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); p[substr($0,RSTART,RLENGTH)]=1 }; next }
      /^#/ { print; next }
@@ -273,21 +294,28 @@ awk '
 /^faiss-cpu @ / { getline; next }
 /^torch==/ { skip=1; next }
 /^torchvision==/ { skip=1; next }
+/^triton==/ { skip=1; next }
 skip && /^[[:space:]]/ { next }
 skip && /^[a-zA-Z0-9]/ { skip=0 }
 skip { next }
 { print }
 ' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI%.txt}.base.txt"
-# x86_64: add torch and torchvision from RHOAI (same version as aarch64: 2.9.0-13 / 0.24.0-9) so all arches use the same version.
+# x86_64: torch, torchvision, triton from RHOAI (triton: cpu-ubi9, matches torch Requires-Dist triton==3.5.0).
 RHOAI_PULP="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9"
+RHOAI_PULP_CPU="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cpu-ubi9"
+TRITON_350_X86_URL="${RHOAI_PULP_CPU}/triton-3.5.0-3-cp312-cp312-linux_x86_64.whl"
+TRITON_350_X86_HASH="a916a1758674bbc35545f3aed9c1e83ed581b59a277cfffca1926c6f5f567a96"
 if [ -f "${WHEEL_HASH_FILE_PYPI%.txt}.x86_64.txt" ]; then
   {
     echo ""
-    echo "# x86_64: torch and torchvision from RHOAI (same version as aarch64)"
+    echo "# x86_64: torch and torchvision from RHOAI cuda12.9-ubi9 (same version as aarch64)"
     echo "torch @ ${RHOAI_PULP}/torch-2.9.0-13-cp312-cp312-linux_x86_64.whl \\"
     echo "    --hash=sha256:6a331fdd10983a88751dcc0e5175a2e4c432225774bbb7931c1d249b55a40816"
     echo "torchvision @ ${RHOAI_PULP}/torchvision-0.24.0-9-cp312-cp312-linux_x86_64.whl \\"
     echo "    --hash=sha256:c1b4ffe7435b2a6e4c849b1be3b1f50d8f1fcb5a9c1bbe6f38e59af57eb27abb"
+    echo "# triton from RHOAI cpu-ubi9 (declared by RHOAI torch METADATA)"
+    echo "triton @ ${TRITON_350_X86_URL} \\"
+    echo "    --hash=sha256:${TRITON_350_X86_HASH}"
   } >> "${WHEEL_HASH_FILE_PYPI%.txt}.x86_64.txt"
 fi
 rm -f "$WHEEL_HASH_FILE_PYPI"

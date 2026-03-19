@@ -453,7 +453,15 @@ On **aarch64 (ARM64)**, PyPI only distributes **CPU-only** wheels for `torch`. C
 
 **Fix (hermetic build):** The script `scripts/konflux_requirements_cuda.sh` appends to `requirements.hashes.wheel.pypi.cuda.aarch64.txt` direct wheel URLs for **torch** and **torchvision** from the [RHOAI cuda12.9-ubi9 index](https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/) (already prefetched; package list at that URL). No extra prefetch source is needed. After regenerating with `make konflux-requirements-cuda` and rebuilding, `torch.cuda.is_available()` should be `True` on aarch64.
 
-**NVIDIA libs must match the torch wheel:** The **PyPI** CUDA `torch` wheel’s `libtorch_cuda.so` embeds RPATH entries such as `$ORIGIN/../../nvidia/cudnn/lib`, so pip-installed `nvidia-*` wheels under the venv are used automatically. The **RHOAI** wheel (cuda12.9-ubi9) is different: its `libtorch_cuda.so` typically has only `RPATH: [$ORIGIN:/usr/lib64/openmpi/lib]`, so the dynamic loader resolves CUDA libraries from the **container** (CUDA base image plus packages such as `libcudnn9`, `libnccl`, `libcusparselt0` in `Containerfile-cuda`), not from `site-packages/nvidia/*/lib`. The image does **not** set `LD_LIBRARY_PATH` to those venv paths. A durable fix for matching PyPI behavior is for the RHOAI wheel build to add the same `$ORIGIN/../../nvidia/*/lib` RPATH entries as the PyPI wheel; report to the RHOAI wheel maintainers if needed.
+**RHOAI torch dependencies (single policy):** Hermetic builds install **`torch` from RHOAI pulp**, not from PyPI CUDA. The **dependency contract** is whatever that wheel declares in its package metadata (`Requires-Dist`), not PyPI’s CUDA `torch` graph. Inspect it for any wheel URL (same METADATA field pip uses):
+
+```shell
+python3 scripts/list_wheel_requires_dist.py 'https://packages.redhat.com/.../torch-....whl'
+```
+
+`make list-wheel-requires-dist WHEEL_URL='https://...'` runs the same. Today that metadata includes runtime deps such as `filelock`, `sympy`, `fsspec`, **`triton==3.5.0`**, etc., and **does not** list the **`nvidia-*` cu12** wheels that PyPI’s CUDA `torch` pulls in. So the project **does not** install those `nvidia-*` pip packages to “satisfy RHOAI torch”—they are not declared on the RHOAI wheel. **Triton** (and any other companion that RHOAI publishes as its own wheel) should be installed from **RHOAI indices** (e.g. **cpu-ubi9** for `triton`), alongside **`torch` / `torchvision`**, as wired in `konflux_requirements_cuda.sh`. Other shared libraries come from the **container** (CUDA base image and `dnf` packages in `Containerfile-cuda`).
+
+**NVIDIA / linker layout:** PyPI CUDA `torch` often relies on pip `nvidia-*` wheels and RPATH into `site-packages/nvidia/...`. The RHOAI `torch` build is different: CUDA runtime pieces are expected from the **image** and distro packages unless the wheel maintainers embed a different layout. Do not assume PyPI’s `nvidia-*` requirement set applies to RHOAI `torch`.
 
 ### Updating RPM Dependencies
 
