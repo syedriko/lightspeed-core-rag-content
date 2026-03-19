@@ -444,7 +444,7 @@ The CUDA image uses the same layout as the CPU `Containerfile` but with a CUDA b
   ```shell
   make konflux-requirements-cuda
   ```
-  The CUDA pipelines (`.tekton/rag-tool-push-cuda.yaml` and `.tekton/rag-tool-pull-request-cuda.yaml`) use `Containerfile-cuda` and the same prefetch flow as CPU, with CUDA-specific requirement files and `build-args-konflux-cuda.conf`.
+  The CUDA pipelines (`.tekton/rag-tool-push-cuda.yaml` and `.tekton/rag-tool-pull-request-cuda.yaml`) use `Containerfile-cuda` and the same prefetch flow as CPU, with CUDA-specific requirement files and `build-args-konflux-cuda.conf`. For hermetic builds, **torch** and **torchvision** are installed from **RHOAI** pulp wheel URLs in `requirements.hashes.wheel.pypi.cuda.x86_64.txt` and `requirements.hashes.wheel.pypi.cuda.aarch64.txt`, not from PyPI.
 - **Non-hermetic:** If Cachi2 is not present, at build time `scripts/remove_pytorch_cpu_pyproject.py` removes the `pytorch-cpu` index from `pyproject.toml`, then `uv lock` and `uv sync` run so that `torch` and `torchvision` come from default PyPI (CUDA wheels).
 
 #### aarch64 and PyTorch CUDA
@@ -453,7 +453,7 @@ On **aarch64 (ARM64)**, PyPI only distributes **CPU-only** wheels for `torch`. C
 
 **Fix (hermetic build):** The script `scripts/konflux_requirements_cuda.sh` appends to `requirements.hashes.wheel.pypi.cuda.aarch64.txt` direct wheel URLs for **torch** and **torchvision** from the [RHOAI cuda12.9-ubi9 index](https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/) (already prefetched; package list at that URL). No extra prefetch source is needed. After regenerating with `make konflux-requirements-cuda` and rebuilding, `torch.cuda.is_available()` should be `True` on aarch64.
 
-**NVIDIA libs must match the torch wheel:** The pip-installed `nvidia-*` packages form a consistent set and use RUNPATH to find each other. The **PyPI** torch wheel's `libtorch_cuda.so` is built correctly: its RPATH includes `$ORIGIN/../../nvidia/cudnn/lib`, `$ORIGIN/../../nvidia/cusparse/lib`, `$ORIGIN/../../nvidia/nvjitlink/lib`, etc., so the loader resolves all CUDA libs from the venv. The **RHOAI** torch wheel (cuda12.9-ubi9) is not: its `libtorch_cuda.so` has only `RPATH: [$ORIGIN:/usr/lib64/openmpi/lib]`, so the loader falls back to the system and can hit `undefined symbol: __nvJitLinkGetErrorLogSize_12_9`. The fix is for the **RHOAI** torch wheel build to use the same RPATH as the PyPI wheel (all `$ORIGIN/../../nvidia/*/lib` entries). Report to the RHOAI wheel maintainers. Until then, the image sets `LD_LIBRARY_PATH` to those venv nvidia lib dirs (matching the PyPI RPATH) so the RHOAI torch wheel works.
+**NVIDIA libs must match the torch wheel:** The **PyPI** CUDA `torch` wheel’s `libtorch_cuda.so` embeds RPATH entries such as `$ORIGIN/../../nvidia/cudnn/lib`, so pip-installed `nvidia-*` wheels under the venv are used automatically. The **RHOAI** wheel (cuda12.9-ubi9) is different: its `libtorch_cuda.so` typically has only `RPATH: [$ORIGIN:/usr/lib64/openmpi/lib]`, so the dynamic loader resolves CUDA libraries from the **container** (CUDA base image plus packages such as `libcudnn9`, `libnccl`, `libcusparselt0` in `Containerfile-cuda`), not from `site-packages/nvidia/*/lib`. The image does **not** set `LD_LIBRARY_PATH` to those venv paths. A durable fix for matching PyPI behavior is for the RHOAI wheel build to add the same `$ORIGIN/../../nvidia/*/lib` RPATH entries as the PyPI wheel; report to the RHOAI wheel maintainers if needed.
 
 ### Updating RPM Dependencies
 

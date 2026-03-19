@@ -4,10 +4,10 @@
 # Uses a copy of pyproject.toml with pytorch-cpu index removed so torch/torchvision
 # can resolve from PyPI (CUDA on x86_64) or RHOAI. Same split as CPU: RHOAI wheels vs PyPI.
 #
-# Why torch/torchvision were not from RHOAI initially: requirements.overrides.cuda.txt
-# omits them so they resolve from default PyPI (newer 2.9.1 / 0.24.1). uv then annotates
-# them "from pypi.org", so they land in the PyPI wheel file. On aarch64 PyPI only has
-# CPU wheels, so we append RHOAI torch/torchvision URLs to the aarch64 file.
+# torch/torchvision: primary resolution uses RHOAI (cuda index first). Hermetic pip install
+# uses RHOAI pulp wheel URLs in requirements.hashes.wheel.pypi.cuda.{x86_64,aarch64}.txt
+# (not PyPI torch). PyPI may still supply other CUDA-related wheels (e.g. nvidia-* cu12)
+# when the resolver emits them as separate lines from pypi.org.
 #
 # Other packages available from RHOAI (cuda12.9-ubi9): see the full list at
 #   https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/
@@ -31,7 +31,8 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda1
 RHOAI_INDEX_URL_CPU="${RHOAI_INDEX_URL/cuda12.9-ubi9/cpu-ubi9}"
 
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
-# PyPI packages to fetch as binary wheels (no source build). Includes torch/CUDA and nvidia-* (binary-only on PyPI).
+# PyPI packages to fetch as binary wheels (no source build). Includes nvidia-* (binary-only on PyPI);
+# torch/torchvision install URLs are overridden per arch (RHOAI pulp), not PyPI.
 # hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.
 # psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
 # faiss-cpu: resolved from RHOAI (CPU index) so prefetch gets the wheel; keep in wheel list.
@@ -117,6 +118,13 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fi
 done < "$RAW_REQ_FILE"
 
+# torch/torchvision are listed here when resolved from RHOAI cpu-ubi9 (still matched via PYPI_WHEELS).
+# The next step runs `uv pip compile` with only the default index (PyPI). If torch==… is present, uv
+# resolves PyPI's CUDA torch and pulls in nvidia-* cu12 wheels—even though hermetic install uses RHOAI
+# pulp wheels from requirements.hashes.wheel.pypi.cuda.{x86_64,aarch64}.txt. Strip torch/torchvision
+# so the second compile cannot re-expand PyPI CUDA torch deps (spurious nvidia-*).
+grep -vE '^(torch|torchvision)(==|[[:space:]]+@)' "$WHEEL_FILE_PYPI" > "${WHEEL_FILE_PYPI}.tmp" && mv "${WHEEL_FILE_PYPI}.tmp" "$WHEEL_FILE_PYPI"
+
 # Update CUDA pipeline configs with binary package list (RHOAI + extra + PyPI wheels including torch/nvidia-*)
 wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
 pypi_wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE_PYPI" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
@@ -132,7 +140,8 @@ echo "Packages from console.redhat.com written to: $WHEEL_FILE ($(wc -l < "$WHEE
 
 # Generate hashed requirement files. Wheel file has only CUDA RHOAI packages (no --extra-index-url; hermeto does not support it).
 uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url "$RHOAI_INDEX_URL" --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
-# --only-binary :all: so hashes are for wheels only; include deps so torch's nvidia-* (and triton etc.) are in the file and prefetched.
+# --only-binary :all: so hashes are for wheels only; include deps for transitive wheels (torch/torchvision
+# are stripped from WHEEL_FILE_PYPI above so PyPI CUDA torch does not pull nvidia-*; triton etc. remain).
 # Pin omegaconf to 2.3.0+ so pip 24.1+ accepts metadata (2.0.6 uses deprecated PyYAML >=5.1.*).
 sed -i 's/^omegaconf==[0-9.]*/omegaconf==2.3.0/' "$WHEEL_FILE_PYPI"
 uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --only-binary ':all:' --python-version 3.12 --emit-index-url --no-annotate > "$WHEEL_HASH_FILE_PYPI"
