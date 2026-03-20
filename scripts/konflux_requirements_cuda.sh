@@ -42,9 +42,10 @@ EXTRA_WHEELS="uv-build,uv,pip,maturin,cmake"
 # psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
 # faiss-cpu: resolved from RHOAI (CPU index) so prefetch gets the wheel; keep in wheel list.
 # llama-index-vector-stores-faiss: wheel-only so prefetch does not build it (and thus faiss-cpu) from source.
+# docling-parse: sdist build runs CMake and git-clones deps (e.g. loguru from github.com); hermetic has no network—wheel only.
 # triton: listed for Tekton prefetch package names. Like torch/torchvision, do not pass triton through the
 # second `uv pip compile` (PyPI-only)—install RHOAI cpu-ubi9 wheels from arch files (torch declares triton==3.5.0).
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss"
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,docling-parse,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss"
 # Split loop: lines matching nvidia-* from pypi.org go to this file if present (not used by RHOAI torch).
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).

@@ -4,45 +4,21 @@
 #
 #    pybuild-deps compile --output-file=requirements-build.cuda.txt requirements.source.cuda.txt.build
 #
-altgraph==0.17.5
-    # via macholib
-bashlex==0.18
-    # via cibuildwheel
-bracex==2.6
-    # via cibuildwheel
-build==1.4.0
-    # via cibuildwheel
 calver==2025.10.20
     # via trove-classifiers
-certifi==2026.2.25
-    # via cibuildwheel
-cibuildwheel==3.4.0
-    # via docling-parse
-cmake==3.31.10
-    # via docling-parse
 cython==3.2.4
     # via
     #   asyncpg
     #   sqlalchemy
-delocate==0.13.0
-    # via docling-parse
-dependency-groups==1.3.1
-    # via cibuildwheel
 expandvars==1.1.2
     # via yarl
-filelock==3.25.2
-    # via cibuildwheel
 flit-core==3.12.0
     # via
     #   aiosqlite
-    #   build
-    #   dependency-groups
     #   packaging
     #   pathspec
     #   pypdf
-    #   pyproject-hooks
     #   tinytag
-    #   typing-extensions
     #   wheel
 hatch-fancy-pypi-readme==25.1.0
     # via
@@ -56,9 +32,7 @@ hatch-vcs==0.5.0
     #   chardet
     #   filelock
     #   fsspec
-    #   humanize
     #   platformdirs
-    #   scikit-build-core
 hatchling==1.26.3
     # via
     #   hatch-fancy-pypi-readme
@@ -69,16 +43,13 @@ hatchling==1.29.0
     # via
     #   attrs
     #   banks
-    #   bracex
     #   chardet
-    #   cibuildwheel
     #   einops
     #   expandvars
     #   filelock
     #   fsspec
     #   hatch-fancy-pypi-readme
     #   hatch-vcs
-    #   humanize
     #   latex2mathml
     #   llama-index
     #   llama-index-cli
@@ -101,16 +72,11 @@ hatchling==1.29.0
     #   polyfactory
     #   pydantic-settings
     #   python-multipart
-    #   scikit-build-core
     #   semchunk
     #   soupsieve
     #   starlette
     #   uvicorn
     #   wcwidth
-humanize==4.15.0
-    # via cibuildwheel
-macholib==1.16.4
-    # via delocate
 maturin==1.10.2
     # via
     #   hf-xet
@@ -118,40 +84,21 @@ maturin==1.10.2
     #   uv-build
 packaging==26.0
     # via
-    #   delocate
     #   hatchling
-    #   scikit-build-core
     #   setuptools-scm
     #   wheel
-patchelf==0.17.2.4
-    # via cibuildwheel
 pathspec==1.0.4
-    # via
-    #   hatchling
-    #   scikit-build-core
+    # via hatchling
 pdm-backend==2.4.7
     # via
     #   fastapi
     #   typer
-platformdirs==4.9.4
-    # via cibuildwheel
 pluggy==1.6.0
     # via hatchling
 poetry-core==2.3.1
     # via
     #   llama-parse
     #   rich
-pybind11==3.0.2
-    # via docling-parse
-pyelftools==0.32
-    # via cibuildwheel
-pyproject-hooks==1.2.0
-    # via build
-scikit-build-core==0.12.2
-    # via
-    #   cmake
-    #   patchelf
-    #   pybind11
 semantic-version==2.10.0
     # via setuptools-rust
 setuptools-rust==1.12.0
@@ -159,7 +106,6 @@ setuptools-rust==1.12.0
 setuptools-scm==9.2.2
     # via
     #   anyio
-    #   delocate
     #   hatch-vcs
     #   llama-stack-api
     #   pluggy
@@ -169,15 +115,10 @@ setuptools-scm==9.2.2
     #   tqdm
 trove-classifiers==2026.1.14.14
     # via hatchling
-typing-extensions==4.15.0
-    # via delocate
 uv-build==0.9.30
     # via llama-index-workflows
 wheel==0.46.3
     # via
-    #   bashlex
-    #   cibuildwheel
-    #   docling-parse
     #   fire
     #   pycparser
     #   sentence-transformers
@@ -190,13 +131,10 @@ setuptools==82.0.1
     # via
     #   anyio
     #   asyncpg
-    #   bashlex
     #   calver
     #   certifi
     #   colorlog
-    #   delocate
     #   dill
-    #   docling-parse
     #   fire
     #   googleapis-common-protos
     #   llama-stack
@@ -209,7 +147,6 @@ setuptools==82.0.1
     #   pluggy
     #   psutil
     #   pycparser
-    #   pyelftools
     #   pyjwt
     #   python-dotenv
     #   regex

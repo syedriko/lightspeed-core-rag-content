@@ -2,8 +2,6 @@
 #    uv pip compile requirements.wheel.cuda.txt --refresh --generate-hashes --index-url https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/ --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal
 --index-url https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda12.9-ubi9/simple/
 
-annotated-doc==0.0.4 \
-    --hash=sha256:6354414936e31ed5581167bab1064ac88cde5d01ccc9a15b32e6ce345f1ab6d6
 antlr4-python3-runtime==4.9.3 \
     --hash=sha256:52d3ffc4af2125d2bf4e7f8e1f3f794f4394c029e491532a47d52f2b7098f14f
 beautifulsoup4==4.14.3 \
@@ -14,8 +12,6 @@ cffi==2.0.0 \
 cryptography==46.0.3 \
     --hash=sha256:8932212d857f2a2d3def6afef840b96b279ffc8ffb0642eb054f95db5861efe0 \
     --hash=sha256:a15a43f54a48be0c0b97feffd7a5001323fc09dc11b61e60a9e6e0e396d6ccb9
-defusedxml==0.7.1 \
-    --hash=sha256:565cb8922eb16783a2b4be7dd76787d875287825ab44be6323828a08568fb2da
 distro==1.9.0 \
     --hash=sha256:8094e3c7bb184c8db134dc611f24dbc3fafb55d78389ccca3e920066ce4890b3
 et-xmlfile==2.0.0 \
@@ -27,51 +23,29 @@ jiter==0.12.0 \
     --hash=sha256:c15edd9a291b61e0eb272e6cfd6edd342398e7e5008e5f6ab109bf534305ef33
 jsonlines==4.0.0 \
     --hash=sha256:1e7b463ff451783f6c1c0735d54eaacaa576c081e7036f97a4f8641f949c902e
-jsonref==1.1.0 \
-    --hash=sha256:76c297eba7dc9a37dbc79d2808a9772395820ced26105a63ead18f8e2122a22e
-jsonschema==4.26.0 \
-    --hash=sha256:2c161b510aac95d89c35dc82eea8954bae63851898ca9a9ff196c343d5d21810
-jsonschema-specifications==2025.9.1 \
-    --hash=sha256:05fbf3bc90557fdbc48d5866dd37bab454430279c4f42df5a5ac6fad908af26d
 lxml==6.0.2 \
     --hash=sha256:24f98facd549f7ef3c72323a747eeac31a67bc0c561d29f3328ab43a5dfbd7d2 \
     --hash=sha256:72c9aa5835202a4341906c84f8d9971596a36237e1e3d688632906cd2f1c4b9d
-markdown-it-py==4.0.0 \
-    --hash=sha256:e22edbad3d5d09a270cd3652fc2c4c7aae1a6b3fdb35dcb200af3276c4c42c1f
 marko==2.2.2 \
     --hash=sha256:6507f902e516694f3aaefb0b1601d3f278bfe68b92e77d74c57ca7db54f237a9
-mdurl==0.1.2 \
-    --hash=sha256:4d1a2b3768f44f08548ada5b0d4d8766d610a0ba7d98f3deb155a164f5442bbd
 mpire==2.10.2 \
     --hash=sha256:8747e048e070b6df87c587d0833a66ceb67f115d6f6276e777b9fbbea07ca83d
 mpmath==1.3.0 \
     --hash=sha256:b13d6f0a6eb4f9eaf0011ca2193fdbf6b57c6b9a8f576268e95e538f217625eb
 openpyxl==3.1.5 \
     --hash=sha256:6daa2d775eaeb6b80b3920c76e8478d917b827cfb5b7f8c86a21bf83fa606067
-pandas==2.3.3 \
-    --hash=sha256:b48651b12ab4af5c8e57bc620dd8aa3a1b287a1f6813e80101b4b9f6a1271156 \
-    --hash=sha256:e7bce03a1b6e2693c12b6cea02170215fd803e1313aa1dbe85270267aa39a89c
 pluggy==1.6.0 \
     --hash=sha256:ff47235aba87db6115b188d26fc1e950f3faa02dfb657d5e2c8f5abdc96c2b2d
 prompt-toolkit==3.0.52 \
     --hash=sha256:cbecd98af732b3adc2d5472bd31e42ff70a3c93bd9e70243eafd76b945aa7cd4
-pygments==2.19.2 \
-    --hash=sha256:9827cffa918d8541a0c7c44079821b491329d1d53a1ec9c7d7486b524c7472c8
 pylatexenc==2.10 \
     --hash=sha256:df56e08b8c5aeea5d791c2e73cf91eaa746e8c52c0f1a51b249dcf033b6e10e6
 pypdfium2==4.30.0 \
     --hash=sha256:95ca6726411ef3902a8e446446006dbb3b477acfdd964bc9eeb76e9743a77602
-python-dateutil==2.9.0.post0 \
-    --hash=sha256:c1c3a207072ed1356f023a05e85438705befe503fe3c93b9cac5961dfe5b28eb
 python-docx==1.2.0 \
     --hash=sha256:93e5e606336799cb588b5d0aae34e21cf078107d68e2c545895405d1214fd171
 python-pptx==1.0.2 \
     --hash=sha256:69f3f0d19bf70c8df5fffad84bbb59508ccd25cd3d41f5b9dd9a843afa388fd6
-referencing==0.37.0 \
-    --hash=sha256:931d0a5ce6b59650e5c2d2840925d89233806ae223cdce770e95b24463819a30
-rpds-py==0.30.0 \
-    --hash=sha256:ab5e30ba62ccb1c4cbd3469d01e801f0c0b5eec0bebd544f9dd82c86e93d62d2 \
-    --hash=sha256:c01ab8b1c6bd452d767f829a752b7f7ef356e3441b3249f7ef99ada0df251c8e
 rtree==1.4.1 \
     --hash=sha256:023f78ab586267470a34dc6eddf429bb84774bbc826b094a381b2979f38938b4 \
     --hash=sha256:aa896558ab4062dfb606dc8ed7ecb50f58f3421469cd975e3f79d6280777374f
@@ -84,8 +58,6 @@ scikit-learn==1.8.0 \
 scipy==1.16.3 \
     --hash=sha256:3f29714be7ec2ea79afb27ee1e11c9077117482cf049ae7398f8b04e5b42b616 \
     --hash=sha256:8c183ea5b0a8df4663ee8d183388e4bc08161de107f8fd77d93618f8cfe60803
-shellingham==1.5.4 \
-    --hash=sha256:d9908e7b3a0367aa56daaee238a85ea4ae1142cb03cf93de0594206e354eae56
 sniffio==1.3.1 \
     --hash=sha256:2d93448a043ebe9050edfdd0b383a790e510a4c7863906648a509c3bd4f37bbf
 sympy==1.14.0 \
