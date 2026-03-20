@@ -34,7 +34,8 @@ RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.3/cuda1
 # CPU RHOAI index (same version as CUDA): faiss-cpu resolves from here so prefetch can fetch wheels.
 RHOAI_INDEX_URL_CPU="${RHOAI_INDEX_URL/cuda12.9-ubi9/cpu-ubi9}"
 
-EXTRA_WHEELS="uv-build,uv,pip,maturin"
+# cmake: PyPI cmake package (not the rpm); must be prefetched as a wheel or pip builds CMake from sdist during isolated builds (docling-parse build chain).
+EXTRA_WHEELS="uv-build,uv,pip,maturin,cmake"
 # PyPI wheel list: binary-only packages for the second uv compile. torch/torchvision/triton are
 # stripped before that compile and installed from RHOAI pulp in the arch files (see policy above).
 # hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.

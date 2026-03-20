@@ -118,7 +118,7 @@ maturin==1.10.2
     #   uv-build
 packaging==26.0
     # via
-    #   cibuildwheel
+    #   delocate
     #   hatchling
     #   scikit-build-core
     #   setuptools-scm
