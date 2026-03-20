@@ -11,6 +11,13 @@ RUN ${DNF_COMMAND} install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nod
     rubygems rubygem-bundler && \
     ${DNF_COMMAND} clean all
 
+# Hermetic: some sdists (e.g. Python patchelf for docling-parse/cibuildwheel) need autotools + a compiler.
+RUN if [ -f /cachi2/cachi2.env ]; then \
+    ${DNF_COMMAND} install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs \
+    gcc cmake git libpq-devel swig autoconf automake libtool && \
+    ${DNF_COMMAND} clean all; \
+    fi
+
 # Install uv package manager
 RUN pip3.12 install uv>=0.7.20
 

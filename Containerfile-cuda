@@ -12,8 +12,9 @@ RUN dnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs \
 
 
 # Build-from-source deps for hermetic install (e.g. psycopg2-binary sdist when prefetch has no PyPI wheel).
+# Python patchelf (via docling-parse → cibuildwheel) runs bootstrap.sh and needs autoreconf.
 RUN  if [ -f /cachi2/cachi2.env ]; then \
-     dnf install -y gcc cargo cmake git libpq-devel swig && dnf clean all; \
+     dnf install -y gcc cargo cmake git libpq-devel swig autoconf automake libtool && dnf clean all; \
      fi
 
 # Install uv package manager (match CPU version constraint)
