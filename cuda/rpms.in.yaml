@@ -10,6 +10,9 @@ packages:
     git,
     libpq-devel,
     swig,
+    autoconf,
+    automake,
+    libtool,
     libcudnn9,
     libnccl,
     libcusparselt0
