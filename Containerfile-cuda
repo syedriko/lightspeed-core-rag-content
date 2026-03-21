@@ -1,5 +1,5 @@
 # Image with CUDA backend. Hermetic build uses requirements.*.cuda.txt (see konflux_requirements_cuda.sh).
-ARG BASE_IMAGE=nvcr.io/nvidia/cuda:12.9.1-devel-ubi9
+ARG BASE_IMAGE=nvcr.io/nvidia/cuda:13.2.0-devel-ubi9
 FROM ${BASE_IMAGE}
 USER root
 
