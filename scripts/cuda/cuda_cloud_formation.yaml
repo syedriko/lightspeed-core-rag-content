@@ -144,7 +144,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: "/dev/sda1"  # Primary volume (root device)
           Ebs:
-            VolumeSize: 50  # Size in GB
+            VolumeSize: 200  # Size in GB
             VolumeType: "gp3"
       Tags:
         - Key: "Name"

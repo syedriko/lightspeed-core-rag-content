@@ -8,6 +8,11 @@ packages:
     python3.12-devel,
     python3.12-pip,
     git,
+    libpq-devel,
+    swig,
+    autoconf,
+    automake,
+    libtool
   ]
 contentOrigin:
   repofiles: ["./redhat.repo"]
