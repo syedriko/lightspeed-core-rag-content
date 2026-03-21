@@ -71,7 +71,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fi
 done < "$RAW_REQ_FILE"
 
-# hf-xet is optional/transitive (e.g. from huggingface_hub) so may not appear in compile output; ensure it is in wheel list so we never build from source (Rust edition 2024 needs Cargo 1.85+).
+# hf-xet: optional/transitive; must be wheel-only (Rust edition 2024 / Cargo 1.85+).
+# Always compile hashes from PyPI only: RHOAI mirrors can serve the same version with a
+# different wheel digest than pypi.org, which breaks pip --require-hashes when both files
+# are used (Containerfile installs requirements.hashes.wheel.txt before .pypi.txt).
+if hf_xet_line=$(grep -E '^hf-xet==' "$WHEEL_FILE" || true); then
+    grep -vE '^hf-xet==' "$WHEEL_FILE" > "${WHEEL_FILE}.tmp" && mv "${WHEEL_FILE}.tmp" "$WHEEL_FILE"
+    if ! grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
+        echo "$hf_xet_line" >> "$WHEEL_FILE_PYPI"
+    fi
+fi
 if ! grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
     echo "hf-xet==1.2.0" >> "$WHEEL_FILE_PYPI"
 fi
