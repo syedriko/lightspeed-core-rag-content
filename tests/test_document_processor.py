@@ -42,9 +42,7 @@ class TestConfig:
 @pytest.fixture
 def mock_processor(mocker):
     """Fixture to mock dependencies for DocumentProcessor tests."""
-    mocker.patch.object(
-        document_processor, "HuggingFaceEmbedding", new=RagMockEmbedding
-    )
+    mocker.patch.object(document_processor, "HuggingFaceEmbedding", new=RagMockEmbedding)
     log = mocker.patch.object(document_processor, "LOG")
     indexdb = mocker.patch.object(document_processor, "_LlamaIndexDB")
     llamadb = mocker.patch.object(document_processor, "_LlamaStackDB")
@@ -119,9 +117,7 @@ class TestDocumentProcessor:
         os.environ.pop("TRANSFORMERS_OFFLINE", None)
         mock_processor["indexdb"].reset_mock()
 
-    @pytest.mark.parametrize(
-        "vector_store_type", ["llamastack-faiss", "llamastack-sqlite-vec"]
-    )
+    @pytest.mark.parametrize("vector_store_type", ["llamastack-faiss", "llamastack-sqlite-vec"])
     def test_init_llama_stack(self, vector_store_type, mock_processor):
         """Test DocumentProcessor initialization with LlamaStack-compatible vector store types."""
         params = mock_processor["params"].copy()

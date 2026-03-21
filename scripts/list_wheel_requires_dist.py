@@ -14,18 +14,31 @@ import struct
 import sys
 import urllib.request
 import zlib
+from typing import cast
+from urllib.parse import urlparse
+
+
+def _require_http_url(url: str) -> None:
+    scheme = urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        msg = f"URL scheme must be http or https, got {scheme!r}"
+        raise ValueError(msg)
 
 
 def _http_range(url: str, start: int, end: int) -> bytes:
-    req = urllib.request.Request(url)
+    _require_http_url(url)
+    req = urllib.request.Request(url)  # noqa: S310
     req.add_header("Range", f"bytes={start}-{end}")
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return r.read()
+    with urllib.request.urlopen(req, timeout=120) as r:  # noqa: S310
+        return cast("bytes", r.read())
 
 
 def _read_metadata_from_wheel(url: str) -> str:
-    with urllib.request.urlopen(urllib.request.Request(url), timeout=60) as r:
+    _require_http_url(url)
+    req = urllib.request.Request(url)  # noqa: S310
+    with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310
         final = r.geturl()
+        _require_http_url(final)
         total = int(r.headers["Content-Length"])
     tail = _http_range(final, total - 70_000, total - 1)
     eocd_i = tail.rfind(b"PK\x05\x06")
@@ -51,12 +64,17 @@ def _read_metadata_from_wheel(url: str) -> str:
             raw = _http_range(final, ds, ds + csz - 1)
             if meth == 0:
                 return raw.decode("utf-8", errors="replace")
-            return zlib.decompressobj(-zlib.MAX_WBITS).decompress(raw).decode("utf-8", errors="replace")
+            return (
+                zlib.decompressobj(-zlib.MAX_WBITS)
+                .decompress(raw)
+                .decode("utf-8", errors="replace")
+            )
         pos = pos + 46 + fn_len + ex_len + cm_len
     raise RuntimeError("METADATA not found in wheel")
 
 
 def main() -> int:
+    """CLI: print Requires-Dist lines for a wheel URL; exit 0 on success."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "wheel_url",

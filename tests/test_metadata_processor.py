@@ -42,9 +42,7 @@ class TestMetadataProcessor:
 
     def test_ping_url_200(self, md_processor, mocker, processor_data):
         """Test ping_url method returns True for successful HTTP 200 response."""
-        mock_get = mocker.patch(
-            "lightspeed_rag_content.metadata_processor.requests.get"
-        )
+        mock_get = mocker.patch("lightspeed_rag_content.metadata_processor.requests.get")
         mock_response = mocker.MagicMock()
         mock_response.status_code = 200
         mock_get.return_value = mock_response
@@ -57,9 +55,7 @@ class TestMetadataProcessor:
 
     def test_ping_url_404(self, md_processor, mocker, processor_data):
         """Test ping_url method returns False for HTTP 404 response."""
-        mock_get = mocker.patch(
-            "lightspeed_rag_content.metadata_processor.requests.get"
-        )
+        mock_get = mocker.patch("lightspeed_rag_content.metadata_processor.requests.get")
         mock_response = mocker.MagicMock()
         mock_response.status_code = 404
         mock_get.return_value = mock_response
@@ -74,9 +70,7 @@ class TestMetadataProcessor:
 
     def test_ping_url_exception(self, md_processor, mocker, processor_data):
         """Test ping_url method returns False when request raises exception."""
-        mock_get = mocker.patch(
-            "lightspeed_rag_content.metadata_processor.requests.get"
-        )
+        mock_get = mocker.patch("lightspeed_rag_content.metadata_processor.requests.get")
         mock_get.side_effect = requests.exceptions.RequestException()
 
         result = md_processor.ping_url(processor_data["url"])
@@ -106,9 +100,7 @@ class TestMetadataProcessor:
         result = md_processor.get_file_title(processor_data["file_path"])
 
         assert "" == result
-        mock_file.assert_called_once_with(
-            processor_data["file_path"], "r", encoding="utf-8"
-        )
+        mock_file.assert_called_once_with(processor_data["file_path"], "r", encoding="utf-8")
 
     def test_populate(self, md_processor, mocker, processor_data):
         """Test populate method returns complete metadata when URL is reachable."""
@@ -132,9 +124,7 @@ class TestMetadataProcessor:
         mock_get_title.assert_called_once_with(processor_data["file_path"])
         mock_ping_url.assert_called_once_with(processor_data["url"])
 
-    def test_populate_url_unreachable(
-        self, md_processor, mocker, caplog, processor_data
-    ):
+    def test_populate_url_unreachable(self, md_processor, mocker, caplog, processor_data):
         """Test populate method handles unreachable URLs and logs warning."""
         mock_url_func = mocker.patch.object(md_processor, "url_function")
         mock_get_title = mocker.patch.object(md_processor, "get_file_title")

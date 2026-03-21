@@ -1,3 +1,8 @@
+# Training / embedding utilities: not part of the shipped package; skip linters and type checkers.
+[tool.black]
+line-length = 100
+extend-exclude = "embeddings_model"
+
 [tool.ruff]
 
 # description of all rules are available on https://docs.astral.sh/ruff/rules/
@@ -12,6 +17,7 @@ lint.flake8-tidy-imports.banned-api = { "unittest" = { msg = "use pytest instead
 
 target-version = "py312"
 line-length = 100
+extend-exclude = ["embeddings_model"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "D104", "D100"]
@@ -23,6 +29,10 @@ ignore_missing_imports = true
 mypy_path = ["src"]
 namespace_packages = true
 explicit_package_bases = true
+exclude = ["^embeddings_model/"]
+
+[tool.pyright]
+exclude = ["embeddings_model"]
 
 [tool.pdm]
 distribution = true
