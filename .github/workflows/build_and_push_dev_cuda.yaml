@@ -2,7 +2,7 @@ name: Build CUDA image, main branch push quay.io
 
 on:
   push:
-    branches: [ main ]
+    branches: [ syedriko-lcore-1440-cuda ]
 
 env:
   IMAGE_NAME: rag-content-cuda
