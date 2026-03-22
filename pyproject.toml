@@ -1,3 +1,8 @@
+# Training / embedding utilities: not part of the shipped package; skip linters and type checkers.
+[tool.black]
+line-length = 100
+extend-exclude = "embeddings_model"
+
 [tool.ruff]
 
 # description of all rules are available on https://docs.astral.sh/ruff/rules/
@@ -19,9 +24,6 @@ force-exclude = true
 "tests/*" = ["S101", "D104", "D100"]
 "scripts/*" = ["S101"]
 
-[tool.black]
-force-exclude = "embeddings_model"
-
 [tool.pydocstyle]
 match-dir = "(?!embeddings_model)[^\\.].*"
 
@@ -32,6 +34,9 @@ mypy_path = ["src"]
 namespace_packages = true
 explicit_package_bases = true
 exclude = ["^embeddings_model/"]
+
+[tool.pyright]
+exclude = ["embeddings_model"]
 
 [tool.pdm]
 distribution = true
@@ -75,8 +80,8 @@ dependencies = [
 requires-python = "==3.12.*"
 dynamic = ["license", "readme"]
 
-# PyTorch has multiple wheel variants for different backends - cpu, gpu, etc.
-# By default on pypi.org is the gpu variant. Forces uv to use the cpu variant.
+# PyTorch has multiple wheel variants for different backends - cpu, cuda, etc.
+# By default on pypi.org is the cuda variant. Forces uv to use the cpu variant.
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"

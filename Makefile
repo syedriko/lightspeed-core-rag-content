@@ -59,20 +59,22 @@ check-format: ## Check that the code is properly formatted using Black and Ruff 
 .PHONY: check-coverage
 check-coverage: ## Check the coverage of unit tests.
 	@echo "Running $@ target ..."
-	uv run coverage run --source=src/lightspeed_rag_content -m unittest discover tests --verbose && uv run coverage report -m --fail-under 90
+	uv run coverage run --source=src/lightspeed_rag_content -m pytest tests --no-cov -q && uv run coverage report -m --fail-under 90
 
 .PHONY: check-code-metrics
 check-code-metrics: ## Check the code using Radon.
 	@echo "Running $@ target ..."
-	@OUTPUT=$$(uv run radon cc -a A src/ | tee /dev/tty | tail -1) && \
-	GRADE=$$(echo $$OUTPUT | grep -oP " [A-F] " | tr -d '[:space:]') && \
+	@RADON_OUT=$$(uv run radon cc -a A src/) && \
+	echo "$$RADON_OUT" && \
+	OUTPUT=$$(echo "$$RADON_OUT" | tail -1) && \
+	GRADE=$$(echo "$$OUTPUT" | grep -oP " [A-F] " | tr -d '[:space:]') && \
 	if [ "$$GRADE" = "A" ]; then exit 0; else exit 1; fi
 
 .PHONY: format
 format: ## Format the code into unified format
 	uv run black scripts src tests
 	uv run ruff check scripts src --fix
-	uv run pre-commit run
+	uv run pre-commit run --all-files
 
 black:
 	uv tool run black --check .
@@ -105,8 +107,16 @@ konflux-requirements:	## generate hermetic requirements.*.txt file and gemfile.l
 	./scripts/konflux_requirements.sh
 	bundle _2.2.33_ lock --add-platform aarch64-linux
 
+konflux-requirements-cuda:	## generate hermetic requirements.*.cuda.txt for CUDA konflux build
+	./scripts/konflux_requirements_cuda.sh
+
+list-wheel-requires-dist:	## print Requires-Dist from a wheel URL (pass WHEEL_URL=...)
+	@test -n "$(WHEEL_URL)" || (echo 'Set WHEEL_URL to a .whl HTTP(S) URL, e.g. RHOAI pulp.' && exit 1)
+	python3 scripts/list_wheel_requires_dist.py "$(WHEEL_URL)"
+
+BASE_IMAGE := $(shell grep '^BASE_IMAGE=' build-args-konflux.conf | cut -d= -f2-)
 konflux-rpm-lock:	## generate rpm.lock.yaml file for konflux build
-	./scripts/generate-rpm-lock.sh
+	./scripts/generate-rpm-lock.sh -i $(BASE_IMAGE)
 
 ruby-bundler: # Install bundler 2.2.33, this is the version used by the container image.
 	gem install bundler -v 2.2.33
