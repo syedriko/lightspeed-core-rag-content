@@ -1,3 +1,8 @@
+# Training / embedding utilities: not part of the shipped package; skip linters and type checkers.
+[tool.black]
+line-length = 100
+extend-exclude = "embeddings_model"
+
 [tool.ruff]
 
 # description of all rules are available on https://docs.astral.sh/ruff/rules/
@@ -12,6 +17,7 @@ lint.flake8-tidy-imports.banned-api = { "unittest" = { msg = "use pytest instead
 
 target-version = "py312"
 line-length = 100
+extend-exclude = ["embeddings_model"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "D104", "D100"]
@@ -23,6 +29,10 @@ ignore_missing_imports = true
 mypy_path = ["src"]
 namespace_packages = true
 explicit_package_bases = true
+exclude = ["^embeddings_model/"]
+
+[tool.pyright]
+exclude = ["embeddings_model"]
 
 [tool.pdm]
 distribution = true
@@ -47,10 +57,9 @@ dependencies = [
     "llama-index-vector-stores-postgres>=0.5.4",
     # Pin torch/torchvision to versions available as CPU wheels
     # torch 2.9.x pairs with torchvision 0.24.x
-    "llama-stack==0.4.3",
-    # User 0.4.4 instead of 0.4.3 to include CVE fix
-    "llama-stack-api==0.4.4",
-    "llama-stack-client==0.4.3",
+    "llama-stack==0.5.0",
+    "llama-stack-api==0.5.0",
+    "llama-stack-client==0.5.0",
     "torch>=2.9.0,<2.10.0",
     "torchvision>=0.24.0,<0.25.0",
     "aiosqlite>=0.21.0",
@@ -67,8 +76,8 @@ dependencies = [
 requires-python = "==3.12.*"
 dynamic = ["license", "readme"]
 
-# PyTorch has multiple wheel variants for different backends - cpu, gpu, etc.
-# By default on pypi.org is the gpu variant. Forces uv to use the cpu variant.
+# PyTorch has multiple wheel variants for different backends - cpu, cuda, etc.
+# By default on pypi.org is the cuda variant. Forces uv to use the cpu variant.
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
