@@ -61,8 +61,7 @@ spec:
            }
          },
          {
-           "type": "bundler",
-           "allow_binary": "true"
+           "type": "bundler"
          }
        ]
   - name: hermetic

@@ -1,0 +1,33 @@
+[
+  {
+    "type": "generic",
+    "path": ".",
+    "lockfile": "artifacts.lock.yaml"
+  },
+  {
+    "type": "rpm",
+    "path": "cuda"
+  },
+  {
+    "type": "pip",
+    "path": ".",
+    "requirements_files": [
+      "requirements.hashes.wheel.cuda.txt",
+      "requirements.hashes.wheel.pypi.cuda.base.txt",
+      "requirements.hashes.wheel.pypi.cuda.x86_64.txt",
+      "requirements.hashes.wheel.pypi.cuda.aarch64.txt",
+      "requirements.hashes.source.cuda.txt",
+      "requirements.hermetic.txt"
+    ],
+    "requirements_build_files": ["requirements-build.cuda.txt"],
+    "binary": {
+      "packages": "uv-build,uv,pip,maturin,cmake,opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,docling-parse,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss,pypdf,pypdfium2,nvidia-cublas-cu12,nvidia-cuda-cupti-cu12,nvidia-cuda-nvrtc-cu12,nvidia-cuda-runtime-cu12,nvidia-cudnn-cu12,nvidia-cufft-cu12,nvidia-cufile-cu12,nvidia-curand-cu12,nvidia-cusolver-cu12,nvidia-cusparse-cu12,nvidia-cusparselt-cu12,nvidia-nccl-cu12,nvidia-nvjitlink-cu12,nvidia-nvshmem-cu12,nvidia-nvtx-cu12",
+      "os": "linux",
+      "arch": "x86_64,aarch64",
+      "py_version": 312
+    }
+  },
+  {
+    "type": "bundler"
+  }
+]

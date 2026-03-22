@@ -110,6 +110,10 @@ konflux-requirements:	## generate hermetic requirements.*.txt file and gemfile.l
 konflux-requirements-cuda:	## generate hermetic requirements.*.cuda.txt for CUDA konflux build
 	./scripts/konflux_requirements_cuda.sh
 
+HERMETO_MODE ?= pip-cpu
+hermeto-fetch-deps:	## run Hermeto prefetch (HERMETO_MODE=pip-cpu|pip-cuda|full-cpu|full-cuda); podman/docker + network
+	@./scripts/run_hermeto_fetch_deps.sh "$(HERMETO_MODE)"
+
 list-wheel-requires-dist:	## print Requires-Dist from a wheel URL (pass WHEEL_URL=...)
 	@test -n "$(WHEEL_URL)" || (echo 'Set WHEEL_URL to a .whl HTTP(S) URL, e.g. RHOAI pulp.' && exit 1)
 	python3 scripts/list_wheel_requires_dist.py "$(WHEEL_URL)"

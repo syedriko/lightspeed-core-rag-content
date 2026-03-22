@@ -4,35 +4,83 @@
 #
 #    pybuild-deps compile --output-file=requirements-build.cuda.txt requirements.source.cuda.txt.build
 #
+beniget==0.4.2.post1
+    # via pythran
 calver==2025.10.20
     # via trove-classifiers
+cffi==2.0.0
+    # via cryptography
+coherent-licensed==0.5.2
+    # via
+    #   importlib-metadata
+    #   zipp
+cython==3.1.8
+    # via scipy
 cython==3.2.4
     # via
     #   asyncpg
+    #   lxml
+    #   numpy
+    #   oracledb
+    #   pandas
+    #   pyyaml
+    #   scikit-learn
+    #   shapely
     #   sqlalchemy
+dunamai==1.26.0
+    # via
+    #   poetry-dynamic-versioning
+    #   uv-dynamic-versioning
 expandvars==1.1.2
-    # via yarl
+    # via
+    #   frozenlist
+    #   propcache
+    #   yarl
 flit-core==3.12.0
     # via
     #   aiosqlite
+    #   click
+    #   coherent-licensed
+    #   idna
+    #   jinja2
+    #   markdown-it-py
+    #   marshmallow
+    #   mdurl
+    #   mypy-extensions
     #   packaging
     #   pathspec
-    #   pypdf
+    #   pyproject-metadata
+    #   threadpoolctl
     #   tinytag
+    #   typing-extensions
     #   wheel
+gast==0.6.0
+    # via
+    #   beniget
+    #   pythran
 hatch-fancy-pypi-readme==25.1.0
     # via
     #   attrs
+    #   httpcore
+    #   httpx
+    #   jsonschema
     #   llama-cloud
     #   llama-stack-client
     #   openai
+    #   pydantic
 hatch-vcs==0.5.0
     # via
     #   attrs
     #   chardet
     #   filelock
     #   fsspec
+    #   jsonschema
+    #   jsonschema-specifications
     #   platformdirs
+    #   referencing
+    #   scikit-build-core
+    #   termcolor
+    #   urllib3
 hatchling==1.26.3
     # via
     #   hatch-fancy-pypi-readme
@@ -41,15 +89,22 @@ hatchling==1.26.3
     #   openai
 hatchling==1.29.0
     # via
+    #   annotated-types
     #   attrs
     #   banks
+    #   beautifulsoup4
     #   chardet
+    #   colorama
     #   einops
     #   expandvars
     #   filelock
     #   fsspec
     #   hatch-fancy-pypi-readme
     #   hatch-vcs
+    #   httpcore
+    #   httpx
+    #   jsonschema
+    #   jsonschema-specifications
     #   latex2mathml
     #   llama-index
     #   llama-index-cli
@@ -62,6 +117,7 @@ hatchling==1.29.0
     #   llama-index-readers-file
     #   llama-index-readers-llama-parse
     #   llama-index-vector-stores-postgres
+    #   mcp
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-http
@@ -70,93 +126,239 @@ hatchling==1.29.0
     #   opentelemetry-semantic-conventions
     #   platformdirs
     #   polyfactory
+    #   pydantic
     #   pydantic-settings
+    #   pygments
     #   python-multipart
+    #   referencing
+    #   scikit-build-core
     #   semchunk
     #   soupsieve
     #   starlette
+    #   termcolor
+    #   typing-inspection
+    #   urllib3
+    #   uv-dynamic-versioning
     #   uvicorn
     #   wcwidth
+jinja2==3.1.6
+    # via
+    #   poetry-dynamic-versioning
+    #   uv-dynamic-versioning
+markupsafe==3.0.3
+    # via jinja2
 maturin==1.10.2
     # via
+    #   cryptography
     #   hf-xet
+    #   jiter
+    #   pydantic-core
+    #   rpds-py
+    #   safetensors
     #   tokenizers
     #   uv-build
+meson-python==0.18.0
+    # via scikit-learn
+meson-python==0.19.0
+    # via
+    #   numpy
+    #   pandas
+    #   scipy
+meson==1.10.2
+    # via
+    #   meson-python
+    #   pandas
+numpy==2.3.5
+    # via
+    #   pandas
+    #   scikit-learn
+    #   scipy
+    #   shapely
 packaging==26.0
     # via
+    #   dunamai
     #   hatchling
+    #   meson-python
+    #   scikit-build-core
     #   setuptools-scm
     #   wheel
 pathspec==1.0.4
-    # via hatchling
+    # via
+    #   hatchling
+    #   scikit-build-core
 pdm-backend==2.4.7
     # via
+    #   annotated-doc
     #   fastapi
+    #   marko
     #   typer
+pdm-pep517==1.1.4
+    # via jsonref
+pkgconfig==1.6.0
+    # via aiohttp
 pluggy==1.6.0
     # via hatchling
+ply==3.11
+    # via pythran
 poetry-core==2.3.1
     # via
+    #   aiohappyeyeballs
+    #   dataclasses-json
+    #   dunamai
     #   llama-parse
+    #   pkgconfig
+    #   poetry-dynamic-versioning
     #   rich
+    #   tomlkit
+poetry-dynamic-versioning==1.10.0
+    # via dataclasses-json
+pybind11==3.0.2
+    # via scipy
+pycparser==3.0
+    # via cffi
+pyproject-metadata==0.11.0
+    # via meson-python
+pythran==0.18.1
+    # via scipy
+scikit-build-core==0.12.2
+    # via pybind11
+scipy==1.16.3
+    # via scikit-learn
 semantic-version==2.10.0
     # via setuptools-rust
 setuptools-rust==1.12.0
-    # via maturin
+    # via
+    #   maturin
+    #   tiktoken
+setuptools-scm==7.1.0
+    # via python-dateutil
 setuptools-scm==9.2.2
     # via
     #   anyio
     #   hatch-vcs
+    #   httpx-sse
+    #   importlib-metadata
+    #   llama-stack
     #   llama-stack-api
+    #   nest-asyncio
     #   pluggy
     #   setuptools-rust
+    #   sniffio
     #   tabulate
     #   tenacity
     #   tqdm
+    #   urllib3
+    #   zipp
+tomlkit==0.14.0
+    # via
+    #   poetry-dynamic-versioning
+    #   uv-dynamic-versioning
 trove-classifiers==2026.1.14.14
     # via hatchling
+typing-extensions==4.15.0
+    # via setuptools-scm
 uv-build==0.9.30
     # via llama-index-workflows
+uv-dynamic-versioning==0.13.0
+    # via mcp
+versioneer==0.29
+    # via pandas
 wheel==0.46.3
     # via
     #   fire
+    #   httpx-sse
+    #   meson
+    #   nest-asyncio
+    #   oci
+    #   oracledb
+    #   pandas
     #   pycparser
+    #   python-dateutil
+    #   rtree
     #   sentence-transformers
+    #   shellingham
+    #   tiktoken
     #   tornado
+    #   tree-sitter-c
+    #   tree-sitter-javascript
+    #   tree-sitter-python
+    #   tzdata
 
 # The following packages are considered to be unsafe in a requirements file:
-setuptools==82.0.0
-    # via charset-normalizer
-setuptools==82.0.1
+setuptools==80.9.0
     # via
+    #   aiohttp
+    #   aiosignal
     #   anyio
     #   asyncpg
     #   calver
     #   certifi
+    #   cffi
+    #   charset-normalizer
     #   colorlog
+    #   cryptography
     #   dill
+    #   distro
     #   fire
+    #   frozenlist
     #   googleapis-common-protos
+    #   greenlet
+    #   httpx-sse
+    #   importlib-metadata
+    #   joblib
     #   llama-stack
     #   llama-stack-api
+    #   lxml
+    #   markupsafe
     #   maturin
+    #   meson
+    #   mpmath
     #   multidict
     #   multiprocess
+    #   nest-asyncio
+    #   networkx
+    #   oci
+    #   oracledb
     #   pathspec
     #   pgvector
+    #   pillow
     #   pluggy
+    #   prompt-toolkit
+    #   propcache
     #   psutil
     #   pycparser
     #   pyjwt
+    #   python-docx
     #   python-dotenv
+    #   python-pptx
+    #   pythran
+    #   pyyaml
     #   regex
+    #   rtree
     #   sentence-transformers
     #   setuptools-rust
     #   setuptools-scm
+    #   shapely
+    #   shellingham
+    #   sniffio
     #   sqlalchemy
+    #   sse-starlette
     #   tabulate
     #   tenacity
+    #   tiktoken
     #   tornado
     #   tqdm
+    #   tree-sitter
+    #   tree-sitter-c
+    #   tree-sitter-javascript
+    #   tree-sitter-python
     #   trove-classifiers
+    #   tzdata
+    #   versioneer
+    #   wrapt
     #   yarl
+    #   zipp
+setuptools==82.0.1
+    # via
+    #   python-dateutil
+    #   setuptools-scm

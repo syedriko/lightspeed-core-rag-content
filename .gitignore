@@ -173,3 +173,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Local Hermeto prefetch (scripts/run_hermeto_fetch_deps.sh)
+.hermeto-output/
