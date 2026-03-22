@@ -9,6 +9,11 @@ packages:
     python3.12-pip,
     git,
     skopeo,
+    libpq-devel,
+    swig,
+    autoconf,
+    automake,
+    libtool
   ]
 contentOrigin:
   repofiles: ["./redhat.repo"]
