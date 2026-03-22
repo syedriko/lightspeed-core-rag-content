@@ -9,15 +9,18 @@ calver==2025.10.20
 cython==3.2.4
     # via
     #   asyncpg
+    #   oracledb
     #   sqlalchemy
+dunamai==1.26.0
+    # via uv-dynamic-versioning
 expandvars==1.1.2
     # via yarl
 flit-core==3.12.0
     # via
     #   aiosqlite
+    #   jinja2
     #   packaging
     #   pathspec
-    #   pypdf
     #   tinytag
     #   wheel
 hatch-fancy-pypi-readme==25.1.0
@@ -62,6 +65,7 @@ hatchling==1.29.0
     #   llama-index-readers-file
     #   llama-index-readers-llama-parse
     #   llama-index-vector-stores-postgres
+    #   mcp
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-http
@@ -75,11 +79,15 @@ hatchling==1.29.0
     #   semchunk
     #   soupsieve
     #   starlette
+    #   uv-dynamic-versioning
     #   uvicorn
     #   wcwidth
+jinja2==3.1.6
+    # via uv-dynamic-versioning
+markupsafe==3.0.3
+    # via jinja2
 maturin==1.10.2
     # via
-    #   hf-xet
     #   tokenizers
     #   uv-build
 packaging==26.0
@@ -97,8 +105,10 @@ pluggy==1.6.0
     # via hatchling
 poetry-core==2.3.1
     # via
+    #   dunamai
     #   llama-parse
     #   rich
+    #   tomlkit
 semantic-version==2.10.0
     # via setuptools-rust
 setuptools-rust==1.12.0
@@ -107,19 +117,26 @@ setuptools-scm==9.2.2
     # via
     #   anyio
     #   hatch-vcs
+    #   llama-stack
     #   llama-stack-api
     #   pluggy
     #   setuptools-rust
     #   tabulate
     #   tenacity
     #   tqdm
+tomlkit==0.14.0
+    # via uv-dynamic-versioning
 trove-classifiers==2026.1.14.14
     # via hatchling
 uv-build==0.9.30
     # via llama-index-workflows
+uv-dynamic-versioning==0.13.0
+    # via mcp
 wheel==0.46.3
     # via
     #   fire
+    #   oci
+    #   oracledb
     #   pycparser
     #   sentence-transformers
     #   tornado
@@ -139,9 +156,12 @@ setuptools==82.0.1
     #   googleapis-common-protos
     #   llama-stack
     #   llama-stack-api
+    #   markupsafe
     #   maturin
     #   multidict
     #   multiprocess
+    #   oci
+    #   oracledb
     #   pathspec
     #   pgvector
     #   pluggy
@@ -154,6 +174,7 @@ setuptools==82.0.1
     #   setuptools-rust
     #   setuptools-scm
     #   sqlalchemy
+    #   sse-starlette
     #   tabulate
     #   tenacity
     #   tornado

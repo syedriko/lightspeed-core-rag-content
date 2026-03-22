@@ -38,14 +38,26 @@ RHOAI_INDEX_URL_CPU="${RHOAI_INDEX_URL/cuda12.9-ubi9/cpu-ubi9}"
 EXTRA_WHEELS="uv-build,uv,pip,maturin,cmake"
 # PyPI wheel list: binary-only packages for the second uv compile. torch/torchvision/triton are
 # stripped before that compile and installed from RHOAI pulp in the arch files (see policy above).
-# hf-xet omitted: prefetch-dependencies cannot fetch from PyPI (uses RHOAI only), and sdists need Rust 1.85+.
+# hf-xet: include in PYPI_WHEELS; pin 1.2.0 before PyPI compile (see overrides.cuda.txt). 1.4+ sdists need Rust edition 2024.
 # psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
 # faiss-cpu: resolved from RHOAI (CPU index) so prefetch gets the wheel; keep in wheel list.
 # llama-index-vector-stores-faiss: wheel-only so prefetch does not build it (and thus faiss-cpu) from source.
 # docling-parse: sdist build runs CMake and git-clones deps (e.g. loguru from github.com); hermetic has no network—wheel only.
 # triton: listed for Tekton prefetch package names. Like torch/torchvision, do not pass triton through the
 # second `uv pip compile` (PyPI-only)—install RHOAI cpu-ubi9 wheels from arch files (torch declares triton==3.5.0).
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,docling-parse,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss"
+# PyPI-resolved pins that must be wheels (not sdist) for the second compile / prefetch.
+# jiter: Rust extension; prefer manylinux wheels so Hermeto does not cargo-vendor a broken sdist lockfile.
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,hf-xet,docling-parse,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss,pypdf,pypdfium2,jiter"
+# Hermeto intersects hashes with PyPI; RHOAI mirror rebuilds break prefetch. Keep torch stack on RHOAI wheel file
+# (stripped from PyPI input; installed from pulp arch files). antlr4 is injected into WHEEL_FILE_PYPI as a pulp URL
+# before the PyPI compile (PyPI has no wheel; omegaconf would otherwise pull antlr4 unsatisfiably under --only-binary).
+RHOAI_WHEEL_STAY_LIST="torch,torchvision,triton"
+# pylatexenc: PyPI sdist-only in practice for the resolver path, but RHOAI publishes a rebuilt py3-none-any
+# wheel. uv --universal records PyPI's wheel hash; hermeto installs RHOAI's (*-8-py3-none-any.whl) → mismatch.
+# Pin pulp URL + digest like antlr4 (update filename/hash if RHOAI republishes the wheel).
+PYLATEXENC_PULP_BASE="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9"
+PYLATEXENC_PULP_FILENAME="pylatexenc-2.10-8-py3-none-any.whl"
+PYLATEXENC_PULP_SHA256="df56e08b8c5aeea5d791c2e73cf91eaa746e8c52c0f1a51b249dcf033b6e10e6"
 # Split loop: lines matching nvidia-* from pypi.org go to this file if present (not used by RHOAI torch).
 
 # Copy pyproject and remove pytorch-cpu so torch/torchvision come from default PyPI (CUDA).
@@ -126,6 +138,67 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fi
 done < "$RAW_REQ_FILE"
 
+# Bulk-move RHOAI pins to PyPI wheel input except RHOAI_WHEEL_STAY_LIST (see comment above).
+_cuda_move_tmp=$(mktemp)
+_cuda_keep_tmp=$(mktemp)
+while IFS= read -r line || [[ -n "$line" ]]; do
+	if [[ "$line" =~ ^([a-zA-Z0-9][a-zA-Z0-9_.-]*)== ]]; then
+		pkg="${BASH_REMATCH[1]}"
+		if echo ",${RHOAI_WHEEL_STAY_LIST}," | grep -qF ",${pkg},"; then
+			printf '%s\n' "$line" >> "$_cuda_keep_tmp"
+		else
+			printf '%s\n' "$line" >> "$_cuda_move_tmp"
+		fi
+	else
+		printf '%s\n' "$line" >> "$_cuda_keep_tmp"
+	fi
+done < "$WHEEL_FILE"
+mv "$_cuda_keep_tmp" "$WHEEL_FILE"
+while IFS= read -r line || [[ -n "$line" ]]; do
+	[[ -z "$line" ]] && continue
+	pkg=$(echo "$line" | sed 's/==.*//')
+	if ! grep -qE "^${pkg}==" "$WHEEL_FILE_PYPI"; then
+		echo "$line" >> "$WHEEL_FILE_PYPI"
+	fi
+done < "$_cuda_move_tmp"
+rm -f "$_cuda_move_tmp"
+
+# Second compile uses --only-binary :all:; PyPI sdist-only pins (e.g. pylatexenc) must stay on the RHOAI wheel file.
+_cuda_sdist_only=$(python3 - "$WHEEL_FILE_PYPI" <<'PY'
+import json, re, sys, urllib.request
+
+path = sys.argv[1]
+req = re.compile(r"^([a-zA-Z0-9][a-zA-Z0-9_.-]*)==([^\s]+)\s*$")
+with open(path) as f:
+    for raw in f:
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("--"):
+            continue
+        m = req.match(line)
+        if not m:
+            continue
+        name, ver = m.group(1), m.group(2)
+        url = f"https://pypi.org/pypi/{name}/{ver}/json"
+        try:
+            with urllib.request.urlopen(url, timeout=45) as r:
+                data = json.load(r)
+        except Exception:
+            continue
+        wheels = [u for u in data.get("urls", []) if u.get("packagetype") == "bdist_wheel"]
+        if not wheels:
+            print(line)
+PY
+)
+if [[ -n "$_cuda_sdist_only" ]]; then
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		[[ -z "$line" ]] && continue
+		grep -vxF "$line" "$WHEEL_FILE_PYPI" > "${WHEEL_FILE_PYPI}.sdist" && mv "${WHEEL_FILE_PYPI}.sdist" "$WHEEL_FILE_PYPI"
+		if ! grep -qxF "$line" "$WHEEL_FILE"; then
+			echo "$line" >> "$WHEEL_FILE"
+		fi
+	done <<< "$_cuda_sdist_only"
+fi
+
 # torch/torchvision are listed here when resolved from RHOAI cpu-ubi9 (still matched via PYPI_WHEELS).
 # The next step runs `uv pip compile` with only the default index (PyPI). If torch==… is present, uv
 # resolves PyPI's CUDA torch and pulls in nvidia-* cu12 wheels—even though hermetic install uses RHOAI
@@ -134,8 +207,8 @@ done < "$RAW_REQ_FILE"
 grep -vE '^(torch|torchvision|triton)(==|[[:space:]]+@)' "$WHEEL_FILE_PYPI" > "${WHEEL_FILE_PYPI}.tmp" && mv "${WHEEL_FILE_PYPI}.tmp" "$WHEEL_FILE_PYPI"
 
 # Update CUDA pipeline configs with binary package list (RHOAI + extra + PyPI wheels including torch/nvidia-*)
-wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
-pypi_wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE_PYPI" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
+wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
+pypi_wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE_PYPI" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
 wheel_packages="$wheel_packages,$EXTRA_WHEELS,$PYPI_WHEELS,$pypi_wheel_packages"
 # Merge can repeat names (e.g. triton from WHEEL_FILE and PYPI_WHEELS; PyPI wheels also in PYPI_WHEELS).
 wheel_packages=$(printf '%s' "$wheel_packages" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)
@@ -149,13 +222,80 @@ done
 echo "Packages from pypi.org written to: $SOURCE_FILE ($(wc -l < "$SOURCE_FILE") packages)"
 echo "Packages from console.redhat.com written to: $WHEEL_FILE ($(wc -l < "$WHEEL_FILE") packages)"
 
-# Generate hashed requirement files. Wheel file has only CUDA RHOAI packages (no --extra-index-url; hermeto does not support it).
-uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url "$RHOAI_INDEX_URL" --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
+# Generate hashed requirement files. uv uses PyPI as extra index so --universal gets full wheel metadata;
+# hermeto does not support --extra-index-url in files — strip that line after compile (see konflux_requirements.sh).
+if grep -qE '^[a-zA-Z0-9][a-zA-Z0-9_.-]*==' "$WHEEL_FILE"; then
+	uv pip compile "$WHEEL_FILE" --refresh --generate-hashes \
+		--index-url "$RHOAI_INDEX_URL" --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match \
+		--python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
+else
+	printf '%s\n' "# No RHOAI-only wheel pins in intermediate list." > "$WHEEL_HASH_FILE"
+	printf '%s\n' "--index-url $RHOAI_INDEX_URL" >> "$WHEEL_HASH_FILE"
+fi
+sed -i '/^--extra-index-url/d' "$WHEEL_HASH_FILE"
+if grep -q '^pylatexenc==' "$WHEEL_HASH_FILE"; then
+	awk -v base="$PYLATEXENC_PULP_BASE" -v wf="$PYLATEXENC_PULP_FILENAME" -v wh="$PYLATEXENC_PULP_SHA256" '
+/^pylatexenc==/ {
+  print "pylatexenc @ " base "/" wf " \\"
+  print "    --hash=sha256:" wh
+  skip=1
+  next
+}
+skip && /^[ \t]+--hash=/ { next }
+skip && /^[[:space:]]*$/ { next }
+skip && /^[a-zA-Z0-9]/ { skip=0 }
+{ print }
+' "$WHEEL_HASH_FILE" > "${WHEEL_HASH_FILE}.plx" && mv "${WHEEL_HASH_FILE}.plx" "$WHEEL_HASH_FILE"
+fi
+# triton: universal RHOAI+PyPI compile emits PyPI-intersectable hashes that do not match RHOAI cpu-ubi9
+# rebuild wheels (e.g. *-3-* vs *-9-*). Hermeto then reports "No wheels found". Triton is installed only
+# from pulp URLs in requirements.hashes.wheel.pypi.cuda.{x86_64,aarch64}.txt (same as torch stack).
+awk '/^triton==/{skip=1; next}
+skip && /^[[:space:]]/{next}
+skip {skip=0}
+{print}' "$WHEEL_HASH_FILE" > "${WHEEL_HASH_FILE}.notri" && mv "${WHEEL_HASH_FILE}.notri" "$WHEEL_HASH_FILE"
 # --only-binary :all: so hashes are for wheels only; include deps for transitive wheels (torch/torchvision
 # are stripped from WHEEL_FILE_PYPI above so PyPI CUDA torch does not pull nvidia-*; triton etc. remain).
 # Pin omegaconf to 2.3.0+ so pip 24.1+ accepts metadata (2.0.6 uses deprecated PyYAML >=5.1.*).
 sed -i 's/^omegaconf==[0-9.]*/omegaconf==2.3.0/' "$WHEEL_FILE_PYPI"
+# antlr4-python3-runtime: PyPI sdist only; omegaconf needs it under --only-binary. Pin pulp wheel (direct URL).
+ANTLR4_WHEEL_PULP_BASE="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9"
+ANTLR4_WHEEL_FILENAME="antlr4_python3_runtime-4.9.3-8-py3-none-any.whl"
+ANTLR4_WHEEL_LINE="antlr4-python3-runtime @ ${ANTLR4_WHEEL_PULP_BASE}/${ANTLR4_WHEEL_FILENAME}"
+if grep -q '^antlr4-python3-runtime==' "$WHEEL_FILE_PYPI"; then
+	awk -v base="$ANTLR4_WHEEL_PULP_BASE" -v wfile="$ANTLR4_WHEEL_FILENAME" '
+/^antlr4-python3-runtime==/ {
+  print "antlr4-python3-runtime @ " base "/" wfile
+  next
+}
+{ print }
+' "$WHEEL_FILE_PYPI" > "${WHEEL_FILE_PYPI}.tmp" && mv "${WHEEL_FILE_PYPI}.tmp" "$WHEEL_FILE_PYPI"
+elif ! grep -qE '^antlr4-python3-runtime(==| @ )' "$WHEEL_FILE_PYPI"; then
+	printf '%s\n' "$ANTLR4_WHEEL_LINE" >> "$WHEEL_FILE_PYPI"
+fi
+# hf-xet: never build from sdist — 1.4+ needs Cargo edition2024; UBI rust is too old. Force 1.2.0 wheel pin (konflux_requirements.sh).
+if grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
+	sed -i 's/^hf-xet==[0-9.]*/hf-xet==1.2.0/' "$WHEEL_FILE_PYPI"
+else
+	echo "hf-xet==1.2.0" >> "$WHEEL_FILE_PYPI"
+fi
 uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --only-binary ':all:' --python-version 3.12 --emit-index-url --no-annotate > "$WHEEL_HASH_FILE_PYPI"
+# Lock antlr4 digest to pulp bytes (uv may emit a trailing " \" already; replace whole stanza).
+ANTLR4_WHEEL_SHA256="52d3ffc4af2125d2bf4e7f8e1f3f794f4394c029e491532a47d52f2b7098f14f"
+if grep -q '^antlr4-python3-runtime @ ' "$WHEEL_HASH_FILE_PYPI"; then
+	awk -v base="$ANTLR4_WHEEL_PULP_BASE" -v wfile="$ANTLR4_WHEEL_FILENAME" -v whash="$ANTLR4_WHEEL_SHA256" '
+/^antlr4-python3-runtime @ / {
+  print "antlr4-python3-runtime @ " base "/" wfile " \\"
+  print "    --hash=sha256:" whash
+  skip=1
+  next
+}
+skip && /^[[:space:]]*--hash=/ { next }
+skip && /^[a-zA-Z0-9]/ { skip=0 }
+skip { next }
+{ print }
+' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI}.tmp" && mv "${WHEEL_HASH_FILE_PYPI}.tmp" "$WHEEL_HASH_FILE_PYPI"
+fi
 # faiss-cpu: use direct wheel URLs so prefetch fetches only wheels (no sdist) and the build never tries to build from source.
 # File has both arches; Containerfile filters to the single faiss-cpu line for TARGETARCH so pip installs only one wheel.
 faiss_version=$(awk '/^faiss-cpu==/ { match($0, /[0-9]+\.[0-9]+\.[0-9]+/); print substr($0, RSTART, RLENGTH); exit } /^faiss-cpu @ / { if (match($0, /faiss_cpu-[0-9]+\.[0-9]+\.[0-9]+/)) { print substr($0, RSTART+9, RLENGTH-9); exit } }' "$WHEEL_HASH_FILE_PYPI")
@@ -272,8 +412,14 @@ awk 'FNR==NR { if (/^[a-zA-Z0-9].*(==| @ )/) { match($0, /^[a-zA-Z0-9][a-zA-Z0-9
      /^--index-url/ { print; next }
      /^[a-zA-Z0-9].*(==| @ )/ { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); name=substr($0,RSTART,RLENGTH); skip=(name in p); if (!skip) print; next }
      { if (!skip) print }' "$WHEEL_HASH_FILE_PYPI" "$WHEEL_HASH_FILE" > "$WHEEL_HASH_FILE.tmp" && mv "$WHEEL_HASH_FILE.tmp" "$WHEEL_HASH_FILE"
+# PyPI nvidia-* cu12 wheels must not be installed: they duplicate/conflict with RHOAI torch (bundled CUDA) and break the stack.
+awk '/^nvidia-[a-zA-Z0-9_-]+==/{skip=1; next}
+skip && /^[[:space:]]/{next}
+skip {skip=0}
+/^nvidia-[a-zA-Z0-9_-]+==/{skip=1; next}
+{print}' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI}.nonv" && mv "${WHEEL_HASH_FILE_PYPI}.nonv" "$WHEEL_HASH_FILE_PYPI"
 uv pip compile "$SOURCE_FILE" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$SOURCE_HASH_FILE"
-# Prefetch cannot fetch from PyPI; omit hf-xet so hermetic build succeeds (huggingface_hub works without it).
+# Keep hf-xet out of the *source* hash file (install is wheel-only from .wheel.pypi.cuda.base.txt).
 awk '/^hf-xet==/{skip=1; next} skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/{skip=0} !skip{print}' "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
 # Only install psycopg2-binary from wheel list (avoids pg_config); strip from source in case it appears there.
 awk '/^psycopg2-binary==/{skip=1; next} skip && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*==/{skip=0} !skip{print}' "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
@@ -289,6 +435,21 @@ awk 'FNR==NR { if (/^[a-zA-Z0-9].*(==| @ )/) { match($0, /^[a-zA-Z0-9][a-zA-Z0-9
      /^--index-url/ { print; next }
      /^[a-zA-Z0-9].*(==| @ )/ { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); name=substr($0,RSTART,RLENGTH); skip=(name in p); if (!skip) print; next }
      { if (!skip) print }' "$WHEEL_HASH_FILE_PYPI" "$SOURCE_HASH_FILE" > "$SOURCE_HASH_FILE.tmp" && mv "$SOURCE_HASH_FILE.tmp" "$SOURCE_HASH_FILE"
+# pylatexenc can land in source hashes (PyPI digest) while hermeto fetches RHOAI *-8-py3-none-any.whl — same pulp pin as WHEEL_HASH_FILE.
+if grep -q '^pylatexenc==' "$SOURCE_HASH_FILE"; then
+	awk -v base="$PYLATEXENC_PULP_BASE" -v wf="$PYLATEXENC_PULP_FILENAME" -v wh="$PYLATEXENC_PULP_SHA256" '
+/^pylatexenc==/ {
+  print "pylatexenc @ " base "/" wf " \\"
+  print "    --hash=sha256:" wh
+  skip=1
+  next
+}
+skip && /^[ \t]+--hash=/ { next }
+skip && /^[[:space:]]*$/ { next }
+skip && /^[a-zA-Z0-9]/ { skip=0 }
+{ print }
+' "$SOURCE_HASH_FILE" > "${SOURCE_HASH_FILE}.plx" && mv "${SOURCE_HASH_FILE}.plx" "$SOURCE_HASH_FILE"
+fi
 # PyPI wheels: emit base (all packages minus faiss-cpu, torch, torchvision) and remove full file.
 # torch/torchvision are arch-specific: x86_64 from PyPI (in .x86_64.txt), aarch64 from RHOAI (in .aarch64.txt).
 # So prefetch does not fetch PyPI torch/torchvision for both arches (which would pull the unused aarch64 CPU wheel).
@@ -323,7 +484,7 @@ fi
 rm -f "$WHEEL_HASH_FILE_PYPI"
 # faiss-cpu from CPU RHOAI is in source list; prefetch will get it from PyPI when processing that file (or build from sdist).
 # pybuild-deps needs source (sdist); exclude wheel-only packages (torch, torchvision, triton, nvidia-*, faiss-cpu) that may have landed in source list.
-grep -v -E '^(torch|torchvision|faiss-cpu|triton|nvidia-[a-zA-Z0-9_-]+)==' "$SOURCE_FILE" > "$SOURCE_FILE.build"
+grep -v -E '^(torch|torchvision|faiss-cpu|triton|nvidia-[a-zA-Z0-9_-]+|antlr4-python3-runtime)==' "$SOURCE_FILE" > "$SOURCE_FILE.build"
 uv run pybuild-deps compile --output-file="$BUILD_FILE" "$SOURCE_FILE.build"
 rm -f "$SOURCE_FILE.build"
 
