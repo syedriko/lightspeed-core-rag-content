@@ -12,8 +12,11 @@ packages:
     swig,
     autoconf,
     automake,
-    libtool
+    libtool,
+    libcudnn9,
+    libnccl,
+    libcusparselt0
   ]
 contentOrigin:
-  repofiles: ["./redhat.repo"]
+  repofiles: ["redhat.repo", "cuda.repo"]
 arches: [x86_64, aarch64]

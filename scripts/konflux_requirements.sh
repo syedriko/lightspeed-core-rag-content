@@ -13,13 +13,24 @@ WHEEL_FILE="requirements.wheel.txt"
 WHEEL_FILE_PYPI="requirements.wheel.pypi.txt"
 SOURCE_HASH_FILE="requirements.hashes.source.txt"
 WHEEL_HASH_FILE="requirements.hashes.wheel.txt"
+WHEEL_HASH_CPU_X86="requirements.hashes.wheel.cpu.x86_64.txt"
+WHEEL_HASH_CPU_AARCH="requirements.hashes.wheel.cpu.aarch64.txt"
 WHEEL_HASH_FILE_PYPI="requirements.hashes.wheel.pypi.txt"
 BUILD_FILE="requirements-build.txt"
 RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.2/cpu-ubi9/simple/"
 
 # extra wheels to be included in the wheel list, often come from build-time dependencies
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript"
+# When uv resolves a pin from PyPI, send it here (wheel) instead of requirements.source.txt (sdist).
+# hf-xet: optional transitive; wheel-only (Rust 2024 / Cargo 1.85+). psycopg2-binary: avoid pg_config.
+# torch/vision/triton: if uv picks PyPI for these, they must land as wheels (not source); RHOAI pins stay via RHOAI_WHEEL_STAY_LIST.
+# jiter: Rust extension; prefer manylinux wheels (avoids Hermeto cargo vendor on sdists with stale Cargo.lock).
+# pylatexenc: Hermeto PyPI wheel hash ≠ RHOAI rebuild; script rewrites wheel file to pulp URL (see below).
+PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,hf-xet,psycopg2-binary,docling-parse,pypdf,pypdfium2,torch,torchvision,triton,jiter,pylatexenc"
+# Hermeto intersects requirement hashes with PyPI; RHOAI mirror rebuilds (*-N-py3-none-any) then fail prefetch.
+# Keep only pins that must stay on RHOAI cpu-ubi9 for the first hash compile; move all other RHOAI pins to the
+# PyPI wheel list so requirements.hashes.wheel.pypi.txt carries PyPI-matching digests.
+RHOAI_WHEEL_STAY_LIST="torch,torchvision,triton"
 
 # Generate requirements list from pyproject.toml from both indexes
 uv pip compile pyproject.toml -o "$RAW_REQ_FILE" \
@@ -69,11 +80,41 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fi
 done < "$RAW_REQ_FILE"
 
-# replace the list of binary packages in konflux pipeline configuration
-# only the package names, not the versions, delimited by commas
-wheel_packages=$(grep -v "^[#-]" "$WHEEL_FILE" | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
-# append extra wheels to the list
-wheel_packages="$wheel_packages,$EXTRA_WHEELS,$PYPI_WHEELS"
+# Bulk-move RHOAI pins to PyPI wheel input except RHOAI_WHEEL_STAY_LIST (torch stack stays on RHOAI index file).
+_move_tmp=$(mktemp)
+_keep_tmp=$(mktemp)
+while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^([a-zA-Z0-9][a-zA-Z0-9_.-]*)== ]]; then
+        pkg="${BASH_REMATCH[1]}"
+        if echo ",${RHOAI_WHEEL_STAY_LIST}," | grep -qF ",${pkg},"; then
+            printf '%s\n' "$line" >> "$_keep_tmp"
+        else
+            printf '%s\n' "$line" >> "$_move_tmp"
+        fi
+    else
+        printf '%s\n' "$line" >> "$_keep_tmp"
+    fi
+done < "$WHEEL_FILE"
+mv "$_keep_tmp" "$WHEEL_FILE"
+while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" ]] && continue
+    pkg=$(echo "$line" | sed 's/==.*//')
+    if ! grep -qE "^${pkg}==" "$WHEEL_FILE_PYPI"; then
+        echo "$line" >> "$WHEEL_FILE_PYPI"
+    fi
+done < "$_move_tmp"
+rm -f "$_move_tmp"
+
+# hf-xet is optional/transitive; ensure wheel-only pin if compile did not emit it.
+if ! grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
+    echo "hf-xet==1.2.0" >> "$WHEEL_FILE_PYPI"
+fi
+
+# Binary prefetch list: RHOAI-only pins + PyPI wheel pins + extras (dedupe like konflux_requirements_cuda.sh).
+wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
+pypi_wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE_PYPI" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
+wheel_packages="$wheel_packages,$EXTRA_WHEELS,$PYPI_WHEELS,$pypi_wheel_packages"
+wheel_packages=$(printf '%s' "$wheel_packages" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)
 sed -i 's/"packages": "[^"]*"/"packages": "'"$wheel_packages"'"/' .tekton/rag-tool-pull-request.yaml
 sed -i 's/"packages": "[^"]*"/"packages": "'"$wheel_packages"'"/' .tekton/rag-tool-push.yaml
 
@@ -82,10 +123,88 @@ echo "Packages from console.redhat.com written to: $WHEEL_FILE ($(wc -l < "$WHEE
 
 
 # Use stdout redirection instead of -o flag to work around uv bug where -o reuses stale hashes from existing output file
-uv pip compile "$WHEEL_FILE" --refresh --generate-hashes --index-url $RHOAI_INDEX_URL --python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
+# RHOAI's simple API alone does not list every platform wheel; --universal then omits hashes (e.g. manylinux x86_64/aarch64).
+# PyPI as extra index fills wheel metadata during compile. Pins still resolve from RHOAI first (unsafe-best-match).
+# Hermeto/cachi2 prefetch does not support --extra-index-url in requirement files; strip it after compile.
+# RHOAI_WHEEL_STAY_LIST pins only; may be empty of package lines if resolver changes.
+if grep -qE '^[a-zA-Z0-9][a-zA-Z0-9_.-]*==' "$WHEEL_FILE"; then
+	uv pip compile "$WHEEL_FILE" --refresh --generate-hashes \
+		--index-url $RHOAI_INDEX_URL --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match \
+		--python-version 3.12 --emit-index-url --no-deps --no-annotate --universal > "$WHEEL_HASH_FILE"
+else
+	printf '%s\n' "# No RHOAI-only wheel pins; all other wheels use PyPI hashes in requirements.hashes.wheel.pypi.txt." > "$WHEEL_HASH_FILE"
+	printf '%s\n' "--index-url $RHOAI_INDEX_URL" >> "$WHEEL_HASH_FILE"
+fi
+sed -i '/^--extra-index-url/d' "$WHEEL_HASH_FILE"
+# Hermeto intersects torch==… + RHOAI index pins with PyPI wheel metadata; RHOAI rebuild filenames never
+# match → "No wheels found". Strip torch/vision/triton from the RHOAI hash file and emit arch fragments
+# with direct pulp / PyPI URLs (prefetch lists both; Containerfile picks one by TARGETARCH).
+if grep -qE '^(torch|torchvision|triton)==' "$WHEEL_HASH_FILE"; then
+	awk '
+/^torch==|^torchvision==|^triton==/ { skip=1; next }
+skip && /^[ \t]/ { next }
+skip && /^[a-zA-Z0-9]/ { skip=0 }
+{ print }
+' "$WHEEL_HASH_FILE" > "${WHEEL_HASH_FILE}.strip" && mv "${WHEEL_HASH_FILE}.strip" "$WHEEL_HASH_FILE"
+fi
+CPU_PULP_32="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.2/cpu-ubi9"
+TV_X86_URL="https://files.pythonhosted.org/packages/7e/e6/7324ead6793075a8c75c56abeed1236d1750de16a5613cfe2ddad164a92a/torchvision-0.24.0-cp312-cp312-manylinux_2_28_x86_64.whl"
+TV_X86_SHA="26b9dd9c083f8e5f7ac827de6d5b88c615d9c582dc87666770fbdf16887e4c25"
+TV_AARCH_URL="https://files.pythonhosted.org/packages/00/7b/e3809b3302caea9a12c13f3adebe4fef127188438e719fd6c8dc93db1da6/torchvision-0.24.0-cp312-cp312-manylinux_2_28_aarch64.whl"
+TV_AARCH_SHA="b0531d1483fc322d7da0d83be52f0df860a75114ab87dbeeb9de765feaeda843"
+{
+	printf '%s\n' "# Autogenerated by konflux_requirements.sh — linux/x86_64 torch stack (direct URLs for Hermeto)."
+	printf '%s\n' "torch @ ${CPU_PULP_32}/torch-2.9.0-7-cp312-cp312-linux_x86_64.whl \\"
+	printf '%s\n' "    --hash=sha256:b6fa21f12a26a38f530f5afd691eaf7f632770034d80a1c66e4d9d52616cff07"
+	printf '%s\n' "torchvision @ ${TV_X86_URL} \\"
+	printf '%s\n' "    --hash=sha256:${TV_X86_SHA}"
+	printf '%s\n' "triton @ ${CPU_PULP_32}/triton-3.5.0-3-cp312-cp312-linux_x86_64.whl \\"
+	printf '%s\n' "    --hash=sha256:6f420ea77a5b22e4dffe502638da2e773a4dd8fbb016f1be140c9cfa81d313d9"
+} > "$WHEEL_HASH_CPU_X86"
+{
+	printf '%s\n' "# Autogenerated by konflux_requirements.sh — linux/aarch64 torch stack (direct URLs for Hermeto)."
+	printf '%s\n' "torch @ ${CPU_PULP_32}/torch-2.9.0-7-cp312-cp312-linux_aarch64.whl \\"
+	printf '%s\n' "    --hash=sha256:dbef52f7f4824242a9cd9aff2ebd7e6c87744b5a40048cbb2e3854361ec727fd"
+	printf '%s\n' "torchvision @ ${TV_AARCH_URL} \\"
+	printf '%s\n' "    --hash=sha256:${TV_AARCH_SHA}"
+	printf '%s\n' "triton @ ${CPU_PULP_32}/triton-3.5.0-3-cp312-cp312-linux_aarch64.whl \\"
+	printf '%s\n' "    --hash=sha256:8325dca63029c7fedd3e70c11ba9abc472e94f54eaddfbe872a7d823d167e595"
+} > "$WHEEL_HASH_CPU_AARCH"
 uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$WHEEL_HASH_FILE_PYPI"
-uv pip compile "$SOURCE_FILE" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$SOURCE_HASH_FILE"
-uv run pybuild-deps compile --output-file="$BUILD_FILE" "$SOURCE_FILE"
+# pylatexenc: Hermeto intersects binary wheel hashes with PyPI; RHOAI rebuild *-8-py3-none-any.whl does not match.
+# Pin the pulp wheel (py3-none-any; same artifact is published on cuda12.9-ubi9 — not on 3.2/cpu-ubi9 pulp).
+PYLATEXENC_CPU_PULP_URL="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9/pylatexenc-2.10-8-py3-none-any.whl"
+PYLATEXENC_CPU_PULP_SHA256="df56e08b8c5aeea5d791c2e73cf91eaa746e8c52c0f1a51b249dcf033b6e10e6"
+if grep -q '^pylatexenc==' "$WHEEL_HASH_FILE_PYPI"; then
+	awk -v url="$PYLATEXENC_CPU_PULP_URL" -v wh="$PYLATEXENC_CPU_PULP_SHA256" '
+/^pylatexenc==/ {
+  print "pylatexenc @ " url " \\"
+  print "    --hash=sha256:" wh
+  skip=1
+  next
+}
+skip && /^[ \t]+--hash=/ { next }
+skip && /^[[:space:]]*$/ { next }
+skip && /^[a-zA-Z0-9]/ { skip=0 }
+{ print }
+' "$WHEEL_HASH_FILE_PYPI" > "${WHEEL_HASH_FILE_PYPI}.plx" && mv "${WHEEL_HASH_FILE_PYPI}.plx" "$WHEEL_HASH_FILE_PYPI"
+fi
+# Hermeto fetches wheels per file index: RHOAI for .wheel.txt, PyPI for .pypi.txt. If a package
+# appears in both, pip must see PyPI hashes (prefetched wheel). Drop the RHOAI copy (same as CUDA script).
+awk 'FNR==NR { if (/^[a-zA-Z0-9].*(==| @ )/) { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); p[substr($0,RSTART,RLENGTH)]=1 }; next }
+     /^#/ { print; next }
+     /^--index-url/ { print; next }
+     /^[a-zA-Z0-9].*(==| @ )/ { match($0, /^[a-zA-Z0-9][a-zA-Z0-9_.-]*/); name=substr($0,RSTART,RLENGTH); skip=(name in p); if (!skip) print; next }
+     { if (!skip) print }' "$WHEEL_HASH_FILE_PYPI" "$WHEEL_HASH_FILE" > "${WHEEL_HASH_FILE}.tmp" && mv "${WHEEL_HASH_FILE}.tmp" "$WHEEL_HASH_FILE"
+# Same filter as pybuild-deps: never emit hashed source lines for CUDA stack / wheel-only pins into the
+# CPU hermetic source file — Hermeto cannot satisfy them (e.g. nvidia-* has no usable sdist for fetch-deps).
+grep -v -E '^(torch|torchvision|triton|faiss-cpu|nvidia-[a-zA-Z0-9_-]+)==' "$SOURCE_FILE" > "${SOURCE_FILE}.hashcompile"
+uv pip compile "${SOURCE_FILE}.hashcompile" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$SOURCE_HASH_FILE"
+rm -f "${SOURCE_FILE}.hashcompile"
+# pybuild-deps cannot fetch nvidia-* / torch stack sdists from PyPI; those are wheel-only in this image.
+grep -v -E '^(torch|torchvision|triton|faiss-cpu|nvidia-[a-zA-Z0-9_-]+)==' "$SOURCE_FILE" > "${SOURCE_FILE}.build"
+uv run pybuild-deps compile --output-file="$BUILD_FILE" "${SOURCE_FILE}.build"
+rm -f "${SOURCE_FILE}.build"
 
 # pin maturin to the version available in the Red Hat registry
 sed -i 's/maturin==[0-9.]*/maturin==1.10.2/' "$BUILD_FILE"
@@ -98,4 +217,4 @@ echo "Packages from pypi.org written to: $SOURCE_HASH_FILE ($( grep -Eo '==[0-9.
 echo "Packages from console.redhat.com written to: $WHEEL_HASH_FILE ($(grep -Eo '==[0-9.]+' "$WHEEL_HASH_FILE" | wc -l) packages)"
 echo "Packages from pypi.org (wheels) written to: $WHEEL_HASH_FILE_PYPI ($(grep -Eo '==[0-9.]+' "$WHEEL_HASH_FILE_PYPI" | wc -l) packages)"
 echo "Build dependencies written to: $BUILD_FILE ($(grep -Eo '==[0-9.]+' "$BUILD_FILE" | wc -l) packages)"
-echo "Remember to commit $SOURCE_HASH_FILE, $WHEEL_HASH_FILE, $WHEEL_HASH_FILE_PYPI, $BUILD_FILE, pipeline configurations and push the changes"
+echo "Remember to commit $SOURCE_HASH_FILE, $WHEEL_HASH_FILE, $WHEEL_HASH_CPU_X86, $WHEEL_HASH_CPU_AARCH, $WHEEL_HASH_FILE_PYPI, $BUILD_FILE, Containerfile, pipeline configurations and push the changes"
