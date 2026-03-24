@@ -36,22 +36,11 @@ RHOAI_INDEX_URL_CPU="${RHOAI_INDEX_URL/cuda12.9-ubi9/cpu-ubi9}"
 
 # cmake: PyPI cmake package (not the rpm); must be prefetched as a wheel or pip builds CMake from sdist during isolated builds (docling-parse build chain).
 EXTRA_WHEELS="uv-build,uv,pip,maturin,cmake"
-# PyPI wheel list: binary-only packages for the second uv compile. torch/torchvision/triton are
-# stripped before that compile and installed from RHOAI pulp in the arch files (see policy above).
-# hf-xet: include in PYPI_WHEELS; pin 1.2.0 before PyPI compile (see overrides.cuda.txt). 1.4+ sdists need Rust edition 2024.
-# psycopg2-binary: wheel avoids needing pg_config / libpq-devel.
-# faiss-cpu: resolved from RHOAI (CPU index) so prefetch gets the wheel; keep in wheel list.
-# llama-index-vector-stores-faiss: wheel-only so prefetch does not build it (and thus faiss-cpu) from source.
-# docling-parse: sdist build runs CMake and git-clones deps (e.g. loguru from github.com); hermetic has no network—wheel only.
-# triton: listed for Tekton prefetch package names. Like torch/torchvision, do not pass triton through the
-# second `uv pip compile` (PyPI-only)—install RHOAI cpu-ubi9 wheels from arch files (torch declares triton==3.5.0).
-# PyPI-resolved pins that must be wheels (not sdist) for the second compile / prefetch.
-# jiter: Rust extension; prefer manylinux wheels so Hermeto does not cargo-vendor a broken sdist lockfile.
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,hf-xet,docling-parse,torch,torchvision,triton,psycopg2-binary,faiss-cpu,llama-index-vector-stores-faiss,pypdf,pypdfium2,jiter"
-# Hermeto intersects hashes with PyPI; RHOAI mirror rebuilds break prefetch. Keep torch stack on RHOAI wheel file
-# (stripped from PyPI input; installed from pulp arch files). antlr4 is injected into WHEEL_FILE_PYPI as a pulp URL
-# before the PyPI compile (PyPI has no wheel; omegaconf would otherwise pull antlr4 unsatisfiably under --only-binary).
-RHOAI_WHEEL_STAY_LIST="torch,torchvision,triton"
+# Policy: RHOAI indices first (CUDA + cpu-ubi9); PyPI pins default to hashed sdists; only names in
+# PYPI_WHEEL_LAST_RESORT use PyPI wheels (last resort). nvidia-* from PyPI always go to the wheel list.
+# Expand PYPI_WHEEL_LAST_RESORT when Hermeto or image build cannot use a sdist (same idea as konflux_requirements.sh).
+# faiss-cpu / llama-index-vector-stores-faiss: keep here until sdist+prefetch path is proven for CUDA.
+PYPI_WHEEL_LAST_RESORT="hf-xet,psycopg2-binary,jiter,docling-parse,torch,torchvision,triton,faiss-cpu,llama-index-vector-stores-faiss"
 # pylatexenc: PyPI sdist-only in practice for the resolver path, but RHOAI publishes a rebuilt py3-none-any
 # wheel. uv --universal records PyPI's wheel hash; hermeto installs RHOAI's (*-8-py3-none-any.whl) → mismatch.
 # Pin pulp URL + digest like antlr4 (update filename/hash if RHOAI republishes the wheel).
@@ -117,7 +106,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ -n "$current_package" ]]; then
             if [[ "$index_url" == "https://pypi.org/simple/" ]]; then
                 package_name=$(echo "$current_package" | sed 's/[=<>!].*//')
-                if echo ",${PYPI_WHEELS}," | grep -qF ",${package_name}," || [[ "$package_name" == nvidia-* ]]; then
+                if echo ",${PYPI_WHEEL_LAST_RESORT}," | grep -qF ",${package_name}," || [[ "$package_name" == nvidia-* ]]; then
                     echo "$current_package" >> "$WHEEL_FILE_PYPI"
                 else
                     echo "$current_package" >> "$SOURCE_FILE"
@@ -127,7 +116,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
             elif [[ "$index_url" == "$RHOAI_INDEX_URL_CPU" ]]; then
                 # CPU RHOAI packages: hermeto uses only CUDA index for wheel file. If PyPI has a wheel (e.g. faiss-cpu), use PyPI wheel list so we don't build from source.
                 package_name=$(echo "$current_package" | sed 's/[=<>!].*//')
-                if echo ",${PYPI_WHEELS}," | grep -qF ",${package_name},"; then
+                if echo ",${PYPI_WHEEL_LAST_RESORT}," | grep -qF ",${package_name},"; then
                     echo "$current_package" >> "$WHEEL_FILE_PYPI"
                 else
                     echo "$current_package" >> "$SOURCE_FILE"
@@ -137,31 +126,6 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         fi
     fi
 done < "$RAW_REQ_FILE"
-
-# Bulk-move RHOAI pins to PyPI wheel input except RHOAI_WHEEL_STAY_LIST (see comment above).
-_cuda_move_tmp=$(mktemp)
-_cuda_keep_tmp=$(mktemp)
-while IFS= read -r line || [[ -n "$line" ]]; do
-	if [[ "$line" =~ ^([a-zA-Z0-9][a-zA-Z0-9_.-]*)== ]]; then
-		pkg="${BASH_REMATCH[1]}"
-		if echo ",${RHOAI_WHEEL_STAY_LIST}," | grep -qF ",${pkg},"; then
-			printf '%s\n' "$line" >> "$_cuda_keep_tmp"
-		else
-			printf '%s\n' "$line" >> "$_cuda_move_tmp"
-		fi
-	else
-		printf '%s\n' "$line" >> "$_cuda_keep_tmp"
-	fi
-done < "$WHEEL_FILE"
-mv "$_cuda_keep_tmp" "$WHEEL_FILE"
-while IFS= read -r line || [[ -n "$line" ]]; do
-	[[ -z "$line" ]] && continue
-	pkg=$(echo "$line" | sed 's/==.*//')
-	if ! grep -qE "^${pkg}==" "$WHEEL_FILE_PYPI"; then
-		echo "$line" >> "$WHEEL_FILE_PYPI"
-	fi
-done < "$_cuda_move_tmp"
-rm -f "$_cuda_move_tmp"
 
 # Second compile uses --only-binary :all:; PyPI sdist-only pins (e.g. pylatexenc) must stay on the RHOAI wheel file.
 _cuda_sdist_only=$(python3 - "$WHEEL_FILE_PYPI" <<'PY'
@@ -199,7 +163,7 @@ if [[ -n "$_cuda_sdist_only" ]]; then
 	done <<< "$_cuda_sdist_only"
 fi
 
-# torch/torchvision are listed here when resolved from RHOAI cpu-ubi9 (still matched via PYPI_WHEELS).
+# torch/torchvision are listed here when resolved from RHOAI cpu-ubi9 (may also appear in PYPI_WHEEL_LAST_RESORT).
 # The next step runs `uv pip compile` with only the default index (PyPI). If torch==… is present, uv
 # resolves PyPI's CUDA torch and pulls in nvidia-* cu12 wheels—even though hermetic install uses RHOAI
 # pulp wheels from requirements.hashes.wheel.pypi.cuda.{x86_64,aarch64}.txt. Strip torch/torchvision
@@ -209,8 +173,8 @@ grep -vE '^(torch|torchvision|triton)(==|[[:space:]]+@)' "$WHEEL_FILE_PYPI" > "$
 # Update CUDA pipeline configs with binary package list (RHOAI + extra + PyPI wheels including torch/nvidia-*)
 wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
 pypi_wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE_PYPI" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
-wheel_packages="$wheel_packages,$EXTRA_WHEELS,$PYPI_WHEELS,$pypi_wheel_packages"
-# Merge can repeat names (e.g. triton from WHEEL_FILE and PYPI_WHEELS; PyPI wheels also in PYPI_WHEELS).
+wheel_packages="$wheel_packages,$EXTRA_WHEELS,$pypi_wheel_packages"
+# Merge can repeat names (e.g. triton from WHEEL_FILE and last-resort list).
 wheel_packages=$(printf '%s' "$wheel_packages" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)
 # Update CUDA pipeline configs (c0ec3 only; do not modify rag-tool-*-cuda.yaml).
 for f in .tekton/lightspeed-core-rag-content-c0ec3-pull-request.yaml .tekton/lightspeed-core-rag-content-c0ec3-push.yaml; do

@@ -1,9 +1,14 @@
 #!/bin/bash
 
-# Script to split requirements by index source
-# Packages from pypi.org go to requirements.source.txt
-# Packages from console.redhat.com go to requirements.wheel.txt
-
+# Script to split requirements by index source.
+#
+# Policy (CPU hermetic):
+#   1) RHOAI — If uv resolves a package from the RHOAI index, keep it on requirements.wheel.txt (RHOAI wheels).
+#   2) PyPI — Prefer hashed sdists (requirements.hashes.source.txt / build from source at image build).
+#   3) PyPI wheels — Only for packages listed in PYPI_WHEEL_LAST_RESORT (cannot use sdist in Hermeto/pip
+#      reliably: Rust/C++ bootstrap, no sdist on PyPI, psycopg2-binary vs sdist, etc.). Add names here when
+#      prefetch or build fails, not preemptively for every transitive.
+#
 # stop on error and print commands
 set -ex
 
@@ -19,18 +24,12 @@ WHEEL_HASH_FILE_PYPI="requirements.hashes.wheel.pypi.txt"
 BUILD_FILE="requirements-build.txt"
 RHOAI_INDEX_URL="https://console.redhat.com/api/pypi/public-rhai/rhoai/3.2/cpu-ubi9/simple/"
 
-# extra wheels to be included in the wheel list, often come from build-time dependencies
+# Prefetch as wheels for image pip/bootstrap (not project deps).
 EXTRA_WHEELS="uv-build,uv,pip,maturin"
-# When uv resolves a pin from PyPI, send it here (wheel) instead of requirements.source.txt (sdist).
-# hf-xet: optional transitive; wheel-only (Rust 2024 / Cargo 1.85+). psycopg2-binary: avoid pg_config.
-# torch/vision/triton: if uv picks PyPI for these, they must land as wheels (not source); RHOAI pins stay via RHOAI_WHEEL_STAY_LIST.
-# jiter: Rust extension; prefer manylinux wheels (avoids Hermeto cargo vendor on sdists with stale Cargo.lock).
-# pylatexenc: Hermeto PyPI wheel hash ≠ RHOAI rebuild; script rewrites wheel file to pulp URL (see below).
-PYPI_WHEELS="opencv-python,omegaconf,rapidocr,sqlite-vec,griffe,griffecli,griffelib,pyclipper,tree-sitter-typescript,hf-xet,psycopg2-binary,docling-parse,pypdf,pypdfium2,torch,torchvision,triton,jiter,pylatexenc"
-# Hermeto intersects requirement hashes with PyPI; RHOAI mirror rebuilds (*-N-py3-none-any) then fail prefetch.
-# Keep only pins that must stay on RHOAI cpu-ubi9 for the first hash compile; move all other RHOAI pins to the
-# PyPI wheel list so requirements.hashes.wheel.pypi.txt carries PyPI-matching digests.
-RHOAI_WHEEL_STAY_LIST="torch,torchvision,triton"
+# PyPI: wheel is last resort — expand this comma list only when hashed sdist path fails (Hermeto or Containerfile build).
+# hf-xet / jiter: Rust sdists fragile under Hermeto; psycopg2-binary: avoid pg_config sdist path.
+# torch/torchvision/triton: if uv ever resolves these from PyPI, there is no practical sdist — wheels only.
+PYPI_WHEEL_LAST_RESORT="hf-xet,psycopg2-binary,jiter,docling-parse,torch,torchvision,triton"
 
 # Generate requirements list from pyproject.toml from both indexes
 uv pip compile pyproject.toml -o "$RAW_REQ_FILE" \
@@ -67,7 +66,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
             if [[ "$index_url" == "https://pypi.org/simple/" ]]; then
                 # Extract package name (without version) for comparison
                 package_name=$(echo "$current_package" | sed 's/[=<>!].*//')
-                if echo ",${PYPI_WHEELS}," | grep -qF ",${package_name},"; then
+                if echo ",${PYPI_WHEEL_LAST_RESORT}," | grep -qF ",${package_name},"; then
                     echo "$current_package" >> "$WHEEL_FILE_PYPI"
                 else
                     echo "$current_package" >> "$SOURCE_FILE"
@@ -80,40 +79,15 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fi
 done < "$RAW_REQ_FILE"
 
-# Bulk-move RHOAI pins to PyPI wheel input except RHOAI_WHEEL_STAY_LIST (torch stack stays on RHOAI index file).
-_move_tmp=$(mktemp)
-_keep_tmp=$(mktemp)
-while IFS= read -r line || [[ -n "$line" ]]; do
-    if [[ "$line" =~ ^([a-zA-Z0-9][a-zA-Z0-9_.-]*)== ]]; then
-        pkg="${BASH_REMATCH[1]}"
-        if echo ",${RHOAI_WHEEL_STAY_LIST}," | grep -qF ",${pkg},"; then
-            printf '%s\n' "$line" >> "$_keep_tmp"
-        else
-            printf '%s\n' "$line" >> "$_move_tmp"
-        fi
-    else
-        printf '%s\n' "$line" >> "$_keep_tmp"
-    fi
-done < "$WHEEL_FILE"
-mv "$_keep_tmp" "$WHEEL_FILE"
-while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" ]] && continue
-    pkg=$(echo "$line" | sed 's/==.*//')
-    if ! grep -qE "^${pkg}==" "$WHEEL_FILE_PYPI"; then
-        echo "$line" >> "$WHEEL_FILE_PYPI"
-    fi
-done < "$_move_tmp"
-rm -f "$_move_tmp"
-
 # hf-xet is optional/transitive; ensure wheel-only pin if compile did not emit it.
 if ! grep -qE '^hf-xet==' "$WHEEL_FILE_PYPI"; then
     echo "hf-xet==1.2.0" >> "$WHEEL_FILE_PYPI"
 fi
 
-# Binary prefetch list: RHOAI-only pins + PyPI wheel pins + extras (dedupe like konflux_requirements_cuda.sh).
+# Binary prefetch: RHOAI wheel names + PyPI last-resort wheels + bootstrap tools (Hermeto fetches wheels for these).
 wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
 pypi_wheel_packages=$(grep -vE '^#|^--' "$WHEEL_FILE_PYPI" | sed '/^$/d' | sed 's/==.*//' | tr '\n' ',' | sed 's/,$//')
-wheel_packages="$wheel_packages,$EXTRA_WHEELS,$PYPI_WHEELS,$pypi_wheel_packages"
+wheel_packages="$wheel_packages,$EXTRA_WHEELS,$pypi_wheel_packages"
 wheel_packages=$(printf '%s' "$wheel_packages" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)
 sed -i 's/"packages": "[^"]*"/"packages": "'"$wheel_packages"'"/' .tekton/rag-tool-pull-request.yaml
 sed -i 's/"packages": "[^"]*"/"packages": "'"$wheel_packages"'"/' .tekton/rag-tool-push.yaml
@@ -126,7 +100,7 @@ echo "Packages from console.redhat.com written to: $WHEEL_FILE ($(wc -l < "$WHEE
 # RHOAI's simple API alone does not list every platform wheel; --universal then omits hashes (e.g. manylinux x86_64/aarch64).
 # PyPI as extra index fills wheel metadata during compile. Pins still resolve from RHOAI first (unsafe-best-match).
 # Hermeto/cachi2 prefetch does not support --extra-index-url in requirement files; strip it after compile.
-# RHOAI_WHEEL_STAY_LIST pins only; may be empty of package lines if resolver changes.
+# RHOAI wheel pins (full set — not moved to PyPI for hash convenience).
 if grep -qE '^[a-zA-Z0-9][a-zA-Z0-9_.-]*==' "$WHEEL_FILE"; then
 	uv pip compile "$WHEEL_FILE" --refresh --generate-hashes \
 		--index-url $RHOAI_INDEX_URL --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match \
@@ -170,7 +144,11 @@ TV_AARCH_SHA="b0531d1483fc322d7da0d83be52f0df860a75114ab87dbeeb9de765feaeda843"
 	printf '%s\n' "triton @ ${CPU_PULP_32}/triton-3.5.0-3-cp312-cp312-linux_aarch64.whl \\"
 	printf '%s\n' "    --hash=sha256:8325dca63029c7fedd3e70c11ba9abc472e94f54eaddfbe872a7d823d167e595"
 } > "$WHEEL_HASH_CPU_AARCH"
-uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$WHEEL_HASH_FILE_PYPI"
+if grep -qE '^[a-zA-Z0-9][a-zA-Z0-9_.-]*==' "$WHEEL_FILE_PYPI"; then
+	uv pip compile "$WHEEL_FILE_PYPI" --refresh --generate-hashes --python-version 3.12 --emit-index-url --no-deps --no-annotate > "$WHEEL_HASH_FILE_PYPI"
+else
+	printf '%s\n' "# No PyPI wheel-only (last-resort) pins." > "$WHEEL_HASH_FILE_PYPI"
+fi
 # pylatexenc: Hermeto intersects binary wheel hashes with PyPI; RHOAI rebuild *-8-py3-none-any.whl does not match.
 # Pin the pulp wheel (py3-none-any; same artifact is published on cuda12.9-ubi9 — not on 3.2/cpu-ubi9 pulp).
 PYLATEXENC_CPU_PULP_URL="https://packages.redhat.com/api/pulp-content/public-rhai/rhoai/3.3/cuda12.9-ubi9/pylatexenc-2.10-8-py3-none-any.whl"
