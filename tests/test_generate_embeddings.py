@@ -129,7 +129,5 @@ class TestGenerateEmbeddingsMain:
             vector_store_type=_generate_embeddings.DEFAULT_VECTOR_STORE,
             doc_type=_generate_embeddings.DEFAULT_DOC_TYPE,
         )
-        mock_doc_processor.process.assert_called_once_with(
-            "/in", metadata=mock_metadata
-        )
+        mock_doc_processor.process.assert_called_once_with("/in", metadata=mock_metadata)
         mock_doc_processor.save.assert_called_once_with("idx", "/out")

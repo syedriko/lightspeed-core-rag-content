@@ -31,15 +31,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a vector database from Markdown files.",
     )
-    parser.add_argument(
-        "-f", "--folder", required=True, help="Input directory with document files"
-    )
-    parser.add_argument(
-        "-o", "--output", required=True, help="Output directory for the vector DB"
-    )
-    parser.add_argument(
-        "-i", "--index", required=True, help="Index name for the vector store"
-    )
+    parser.add_argument("-f", "--folder", required=True, help="Input directory with document files")
+    parser.add_argument("-o", "--output", required=True, help="Output directory for the vector DB")
+    parser.add_argument("-i", "--index", required=True, help="Index name for the vector store")
     parser.add_argument(
         "-c",
         "--chunk-size",
