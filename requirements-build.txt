@@ -11,7 +11,7 @@ cython==3.2.4
     #   oracledb
     #   pyclipper
     #   sqlalchemy
-dunamai==1.26.0
+dunamai==1.26.1
     # via uv-dynamic-versioning
 expandvars==1.1.2
     # via yarl
