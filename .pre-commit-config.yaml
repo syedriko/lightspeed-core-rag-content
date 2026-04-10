@@ -1,0 +1,19 @@
+# https://pre-commit.com
+# Align with Makefile targets: black + ruff on scripts, src, tests (ruff: scripts, src only).
+# embeddings_model/ is excluded via pyproject.toml (Black/Ruff) and is outside these paths.
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        files: ^(scripts|src|tests)/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(scripts|src)/
